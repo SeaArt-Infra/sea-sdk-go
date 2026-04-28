@@ -1,0 +1,42 @@
+version: "3"
+
+vars:
+  GO: go
+  PACKAGE: ./...
+  GOCACHE: '{{default (printf "%s/.cache/go-build" .TASKFILE_DIR) .GOCACHE}}'
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  fmt:
+    desc: Format Go source files
+    cmds:
+      - mkdir -p "{{.GOCACHE}}"
+      - "{{.GO}} fmt {{.PACKAGE}}"
+
+  test:
+    desc: Run Go tests
+    cmds:
+      - mkdir -p "{{.GOCACHE}}"
+      - GOCACHE="{{.GOCACHE}}" {{.GO}} test {{.PACKAGE}}
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - mkdir -p "{{.GOCACHE}}"
+      - GOCACHE="{{.GOCACHE}}" {{.GO}} vet {{.PACKAGE}}
+
+  check:
+    desc: Run fmt, vet, and test
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: test
+
+  clean:
+    desc: Remove local build cache and generated artifacts
+    cmds:
+      - rm -rf .cache coverage.out coverage.html dist bin

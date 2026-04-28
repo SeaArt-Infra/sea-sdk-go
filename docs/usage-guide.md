@@ -1,0 +1,479 @@
+# SeaArt Go SDK 使用说明文档
+
+SeaArt Go SDK（`sa-go`）是 SeaArt AI 平台的官方 Go 客户端库，提供多模态任务（图像/视频生成）、厂商透传和 LLM 文本处理能力。
+
+**要求：** Go 1.22+，无第三方依赖
+
+---
+
+## 安装
+
+```bash
+go get github.com/seaart/sa-go
+```
+
+---
+
+## 快速开始
+
+```go
+import sa "github.com/seaart/sa-go"
+
+client, err := sa.New(&sa.ClientConfig{
+    APIKey: "sa-your-api-key",
+})
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+---
+
+## 客户端配置
+
+```go
+client, err := sa.New(&sa.ClientConfig{
+    APIKey:             "sa-your-api-key",       // 必填：SeaArt API Key
+    BaseURL:            "https://custom-url.com", // 可选：自定义基础地址
+    ModelBaseURL:       "https://model-url.com",  // 可选：多模态端点
+    LLMBaseURL:         "https://llm-url.com",    // 可选：LLM 端点
+    PassthroughBaseURL: "https://model-url.com",  // 可选：厂商透传端点，默认同 ModelBaseURL
+    Project:            "my-project",            // 可选：作为 X-Project 头发送
+    HTTPClient:         &http.Client{},           // 可选：自定义 HTTP 客户端
+    Timeout:            60 * time.Second,         // 可选：默认 5 分钟
+})
+```
+
+**默认端点：**
+- Base: `https://gateway.example.com`
+- 认证方式: `Authorization: Bearer {apiKey}`
+
+---
+
+## Modal API（多模态任务）
+
+用于图像生成、视频生成等多模态 AI 任务。
+
+### 创建任务（原始方式）
+
+```go
+ctx := context.Background()
+
+task, err := client.Modal.Create(ctx, sa.JSONMap{
+    "model": "vidu_q3_reference",
+    "input": []map[string]any{
+        {
+            "type": "message",
+            "role": "user",
+            "content": []map[string]any{
+                {"type": "text", "text": "cinematic shot"},
+                {"type": "image_url", "url": "https://example.com/ref.webp"},
+            },
+        },
+    },
+    "parameters": map[string]any{
+        "duration": 5,
+    },
+})
+```
+
+### 创建任务（Builder 方式，推荐）
+
+```go
+body := sa.NewTask("vidu_q3_reference").
+    User(
+        sa.Text("cinematic shot"),
+        sa.ImageURL("https://example.com/ref1.webp"),
+        sa.ImageURL("https://example.com/ref2.webp"),
+    ).
+    Param("duration", 5).
+    Metadata("trace_id", "trace-123").
+    Build()
+
+task, err := client.Modal.Create(ctx, body)
+```
+
+**内容类型构造器：**
+
+| 函数 | 说明 |
+|------|------|
+| `sa.Text(text)` | 文本内容 |
+| `sa.ImageURL(url)` | 图片 URL |
+| `sa.VideoURL(url)` | 视频 URL |
+| `sa.AudioURL(url)` | 音频 URL |
+| `sa.FileID(id)` | 文件 ID |
+
+### 等待任务完成
+
+```go
+// 方式一：直接在 task 对象上等待
+task, err = task.Wait(ctx,
+    sa.WithPollInterval(3*time.Second),
+    sa.WithPollTimeout(5*time.Minute),
+    sa.WithPollCallback(func(status string, progress float64) {
+        fmt.Printf("状态: %s, 进度: %.1f%%\n", status, progress*100)
+    }),
+)
+
+// 方式二：通过 client 等待
+task, err = client.Modal.Wait(ctx, task.ID)
+```
+
+**轮询选项：**
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `sa.WithPollInterval(d)` | 轮询间隔 | 3s |
+| `sa.WithPollTimeout(d)` | 最大等待时间 | 5 分钟 |
+| `sa.WithPollCallback(fn)` | 进度回调 | - |
+
+### 获取任务结果
+
+```go
+if task.Status == "completed" {
+    for _, output := range task.Output {
+        for _, content := range output.Content {
+            fmt.Printf("类型: %s, URL: %s\n", content.Type, content.URL)
+        }
+    }
+}
+```
+
+**Task 结构体：**
+
+```go
+type Task struct {
+    ID       string    // 任务 ID
+    Status   string    // "in_progress" | "completed" | "failed"
+    Model    string    // 使用的模型
+    Progress float64   // 进度 0.0~1.0
+    Output   []Output  // 生成结果
+    Usage    *Usage    // 计费信息
+    Error    *APIError // 错误详情（失败时）
+}
+```
+
+---
+
+## Passthrough API（厂商透传）
+
+用于调用厂商原始 API 形态的接口，路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+
+### JSON 请求
+
+```go
+resp, err := client.Passthrough.Post(ctx, "/kling/v1/videos/text2video", sa.JSONMap{
+    "model_name": "kling-v1",
+    "prompt":     "cinematic shot",
+}, sa.WithHeader("X-Trace-Id", "trace-123"))
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(resp.StatusCode)
+fmt.Println(string(resp.Body))
+```
+
+### 原始请求体透传
+
+```go
+resp, err := client.Passthrough.RequestRaw(
+    ctx,
+    http.MethodPost,
+    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
+    []byte(`{"contents":[{"parts":[{"text":"paint a cat"}]}]}`),
+)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+`PassthroughResponse` 会保留响应状态码、响应头和原始 body：
+
+```go
+type PassthroughResponse struct {
+    StatusCode int
+    Headers    http.Header
+    Body       sa.RawResponse
+}
+```
+
+---
+
+## LLM API
+
+### Chat Completions（OpenAI 兼容）
+
+```go
+raw, err := client.LLM.ChatCompletions(ctx, sa.JSONMap{
+    "model": "gpt-4o-mini",
+    "messages": []map[string]any{
+        {"role": "user", "content": "你好"},
+    },
+    "max_tokens": 64,
+})
+
+resp, err := sa.Decode[sa.ChatCompletionResponse](raw)
+fmt.Println(resp.Choices[0].Message.Content)
+```
+
+### Chat Completions 流式
+
+```go
+ch, err := client.LLM.ChatCompletionsStream(ctx, sa.JSONMap{
+    "model":    "gpt-4o-mini",
+    "messages": []map[string]any{{"role": "user", "content": "你好"}},
+})
+
+for event := range ch {
+    if event.Err != nil {
+        log.Fatal(event.Err)
+    }
+    if event.Done {
+        break
+    }
+    chunk, _ := sa.Decode[sa.ChatCompletionResponse](event.Data)
+    fmt.Print(chunk.Choices[0].Delta.Content)
+}
+```
+
+### Messages API（Anthropic 格式）
+
+```go
+// 非流式
+raw, err := client.LLM.Messages(ctx, sa.JSONMap{
+    "model":      "claude-3-5-sonnet",
+    "messages":   []sa.JSONMap{{"role": "user", "content": "你好"}},
+    "max_tokens": 64,
+})
+
+// 流式 + 文本组装器
+ch, err := client.LLM.MessagesStream(ctx, sa.JSONMap{
+    "model":      "claude-3-5-sonnet",
+    "messages":   []sa.JSONMap{{"role": "user", "content": "你好"}},
+    "max_tokens": 64,
+})
+
+var assembler sa.MessagesStreamTextAssembler
+for event := range ch {
+    if event.Done { break }
+    chunk, _ := sa.Decode[sa.MessagesStreamChunk](event.Data)
+    assembler.Add(chunk)
+}
+fmt.Println(assembler.Text())
+```
+
+### Responses API
+
+```go
+// 非流式
+raw, err := client.LLM.Responses(ctx, payload)
+
+// 流式 + 文本组装器
+ch, err := client.LLM.ResponsesStream(ctx, payload)
+
+var assembler sa.ResponsesStreamTextAssembler
+for event := range ch {
+    if event.Done { break }
+    chunk, _ := sa.Decode[sa.ResponsesResponseStreamChunk](event.Data)
+    assembler.Add(chunk)
+}
+fmt.Println(assembler.Text())
+```
+
+### Embeddings
+
+```go
+raw, err := client.LLM.Embeddings(ctx, sa.JSONMap{
+    "model": "text-embedding-3-small",
+    "input": "需要向量化的文本",
+})
+resp, _ := sa.Decode[sa.EmbeddingsResponse](raw)
+```
+
+### Reranking
+
+```go
+raw, err := client.LLM.Rerank(ctx, sa.JSONMap{
+    "model": "rerank-model",
+    "query": "搜索查询",
+    "documents": []string{"文档1", "文档2"},
+})
+resp, _ := sa.Decode[sa.RerankResponse](raw)
+for _, result := range resp.Results {
+    fmt.Printf("Index: %d, Score: %.4f\n", result.Index, result.RelevanceScore)
+}
+```
+
+### 列出可用模型
+
+```go
+raw, err := client.LLM.ListModels(ctx)
+resp, _ := sa.Decode[sa.LLMModelListResponse](raw)
+for _, model := range resp.Data {
+    fmt.Println(model.ID)
+}
+```
+
+---
+
+## 请求选项
+
+可对任意请求附加自定义 HTTP 头：
+
+```go
+client.LLM.ChatCompletions(ctx, payload,
+    sa.WithHeader("X-Trace-Id", "trace-123"),
+    sa.WithHeader("X-Tenant-Id", "tenant-a"),
+)
+
+// 批量设置
+client.Modal.Create(ctx, body,
+    sa.WithHeaders(http.Header{
+        "X-Trace-Id": []string{"trace-123"},
+    }),
+)
+```
+
+---
+
+## 错误处理
+
+```go
+_, err := client.LLM.ChatCompletions(ctx, payload)
+if err != nil {
+    sdkErr, ok := err.(*sa.Error)
+    if ok {
+        switch sdkErr.Kind {
+        case sa.ErrAuth:
+            log.Fatal("API Key 无效或无权限")
+        case sa.ErrQuota:
+            log.Fatal("请求频率超限，请稍后重试")
+        case sa.ErrTimeout:
+            log.Fatal("请求超时")
+        case sa.ErrNetwork:
+            log.Fatal("网络连接错误")
+        case sa.ErrTaskFailed:
+            log.Fatalf("任务执行失败: %s (TaskID: %s)", sdkErr.Message, sdkErr.TaskID)
+        default:
+            log.Fatalf("错误: %s", sdkErr.Message)
+        }
+    }
+}
+```
+
+**错误类型常量：**
+
+| 常量 | 触发场景 |
+|------|----------|
+| `sa.ErrAuth` | HTTP 401/403，认证失败 |
+| `sa.ErrQuota` | HTTP 429，超出配额/频率限制 |
+| `sa.ErrTimeout` | HTTP 408/504，轮询超时 |
+| `sa.ErrNetwork` | 网络连接错误 |
+| `sa.ErrTaskFailed` | 任务执行失败 |
+| `sa.ErrGeneral` | 其他错误 |
+
+---
+
+## 完整示例
+
+### 视频生成
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    sa "github.com/seaart/sa-go"
+)
+
+func main() {
+    client, err := sa.New(&sa.ClientConfig{
+        APIKey: "sa-your-api-key",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    ctx := context.Background()
+
+    // 创建视频生成任务
+    task, err := client.Modal.Create(ctx,
+        sa.NewTask("vidu_q3_reference").
+            User(
+                sa.Text("一只猫在月光下奔跑，电影级画面"),
+                sa.ImageURL("https://example.com/cat.jpg"),
+            ).
+            Param("duration", 5).
+            Build(),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("任务已创建: %s\n", task.ID)
+
+    // 等待完成
+    task, err = task.Wait(ctx,
+        sa.WithPollCallback(func(status string, progress float64) {
+            fmt.Printf("\r进度: %.0f%%", progress*100)
+        }),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // 输出结果
+    for _, output := range task.Output {
+        for _, content := range output.Content {
+            fmt.Printf("\n视频 URL: %s\n", content.URL)
+        }
+    }
+}
+```
+
+### LLM 流式对话
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    sa "github.com/seaart/sa-go"
+)
+
+func main() {
+    client, _ := sa.New(&sa.ClientConfig{APIKey: "sa-your-api-key"})
+    ctx := context.Background()
+
+    ch, err := client.LLM.ChatCompletionsStream(ctx, sa.JSONMap{
+        "model": "gpt-4o-mini",
+        "messages": []map[string]any{
+            {"role": "user", "content": "用一句话介绍 Go 语言"},
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for event := range ch {
+        if event.Err != nil {
+            log.Fatal(event.Err)
+        }
+        if event.Done {
+            break
+        }
+        chunk, _ := sa.Decode[sa.ChatCompletionResponse](event.Data)
+        if len(chunk.Choices) > 0 {
+            fmt.Print(chunk.Choices[0].Delta.Content)
+        }
+    }
+    fmt.Println()
+}
+```
