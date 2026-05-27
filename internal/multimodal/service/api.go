@@ -18,7 +18,8 @@ const (
 	PathTask             = "/v1/generation/task/"
 	PathModelSkillSearch = "/v1/models/skill/search"
 	PathModelSkill       = "/v1/models/skill/"
-	PathImageScan        = "/v1/image/scan"
+	// PathImageScan is the content-safety scan endpoint used for images, GIFs, and videos.
+	PathImageScan = "/v1/image/scan"
 )
 
 func CreateTask(client *transport.Client, ctx context.Context, body any, headers http.Header) (*mmtypes.GenerationResponse, error) {
@@ -89,6 +90,7 @@ func GetModelSkill(client *transport.Client, ctx context.Context, model string, 
 	return string(payload), nil
 }
 
+// ScanImage sends an image, GIF, or video safety scan request to PathImageScan.
 func ScanImage(client *transport.Client, ctx context.Context, req mmtypes.ImageScanRequest, headers http.Header) (*mmtypes.ImageScanResponse, error) {
 	req.URI = strings.TrimSpace(req.URI)
 	if req.URI == "" {
