@@ -183,6 +183,57 @@ type ImageScanFrameResult struct {
 	RiskTypes []ImageScanRiskType `json:"risk_types,omitempty"`
 }
 
+// FaceScanRequest is the request body for POST /v1/face/scan.
+type FaceScanRequest struct {
+	// URI is the image or video URL to scan.
+	URI string `json:"uri,omitempty"`
+	// ImgBase64 is a base64-encoded image payload. URI or ImgBase64 is required.
+	ImgBase64 string `json:"img_base64,omitempty"`
+	// IsVideo marks the URI as video content when set to 1; images use 0.
+	IsVideo int `json:"is_video"`
+	// Canary is forwarded to the upstream face scan service for canary routing.
+	Canary string `json:"canary,omitempty"`
+	// Scene is forwarded to the upstream face scan service for scenario-specific detection.
+	Scene string `json:"scene,omitempty"`
+	// Duration is the video duration in seconds and is used for video billing when known.
+	Duration float64 `json:"duration,omitempty"`
+}
+
+// FaceScanResponse is the parsed response returned by POST /v1/face/scan.
+//
+// The upstream face scan service owns most response fields, so Extra keeps
+// provider-specific fields available while Usage is decoded for gateway billing.
+type FaceScanResponse struct {
+	// OK reports whether the scan service completed the business request successfully.
+	OK bool `json:"ok,omitempty"`
+	// Error contains the scan service business error when OK is false.
+	Error string `json:"error,omitempty"`
+	// Usage contains gateway billing metadata injected by inference-gateway.
+	Usage *Usage `json:"usage,omitempty"`
+	// Extra contains upstream response fields that are not modeled by the SDK yet.
+	Extra map[string]any `json:"-"`
+}
+
+func (r *FaceScanResponse) UnmarshalJSON(data []byte) error {
+	type alias FaceScanResponse
+	var typed alias
+	if err := json.Unmarshal(data, &typed); err != nil {
+		return err
+	}
+
+	var extra map[string]any
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	delete(extra, "ok")
+	delete(extra, "error")
+	delete(extra, "usage")
+
+	*r = FaceScanResponse(typed)
+	r.Extra = extra
+	return nil
+}
+
 func (t *TaskResponse) URLs() []string {
 	var urls []string
 	for _, out := range t.Output {

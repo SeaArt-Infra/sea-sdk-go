@@ -163,6 +163,25 @@ fmt.Println(resp.OK, resp.NSFWLevel, resp.RiskTypes)
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
 
+### 人脸检测
+
+使用 `client.Modal.ScanFace` 调用 `ModelBaseURL + /v1/face/scan`。网关会转发到上游 `/cloud/face/scan`。
+
+```go
+resp, err := client.Modal.ScanFace(ctx, sa.FaceScanRequest{
+    URI:     "https://example.com/image.jpg",
+    IsVideo: 0,
+    Scene:   "avatar",
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.OK, resp.Usage)
+fmt.Println(resp.Extra["face_count"])
+```
+
+也可以传 `ImgBase64`。视频检测设置 `IsVideo: 1`，可传 `Duration`；上游返回中的未建模字段会保留在 `Extra`。
+
 ---
 
 ## Passthrough API（厂商透传）

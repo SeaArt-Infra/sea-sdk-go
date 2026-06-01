@@ -338,6 +338,117 @@ func TestModalScanImage_RequiresURI(t *testing.T) {
 	}
 }
 
+func TestModalScanFace_PostsFaceScanRequest(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/v1/face/scan" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("unexpected authorization: %s", got)
+		}
+		if got := r.Header.Get("X-Trace-Id"); got != "trace-face" {
+			t.Fatalf("unexpected trace header: %s", got)
+		}
+
+		body := extractBody(t, r)
+		if body["uri"] != "https://example.com/face.jpg" {
+			t.Fatalf("unexpected uri: %v", body["uri"])
+		}
+		if body["is_video"] != float64(0) {
+			t.Fatalf("unexpected is_video: %v", body["is_video"])
+		}
+		if body["scene"] != "avatar" {
+			t.Fatalf("unexpected scene: %v", body["scene"])
+		}
+		if body["canary"] != "gray" {
+			t.Fatalf("unexpected canary: %v", body["canary"])
+		}
+
+		writeJSON(w, 200, map[string]any{
+			"ok":         true,
+			"face_count": 1,
+			"faces": []map[string]any{
+				{"score": 0.99},
+			},
+			"usage": map[string]any{
+				"cost": "0.002",
+			},
+		})
+	})
+
+	resp, err := client.Modal.ScanFace(context.Background(), sa.FaceScanRequest{
+		URI:     "https://example.com/face.jpg",
+		IsVideo: 0,
+		Canary:  "gray",
+		Scene:   "avatar",
+	}, sa.WithHeader("X-Trace-Id", "trace-face"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.OK {
+		t.Fatal("expected ok response")
+	}
+	if resp.Usage == nil || resp.Usage.Cost.String() != "0.002" {
+		t.Fatalf("unexpected usage: %+v", resp.Usage)
+	}
+	if resp.Extra["face_count"] != float64(1) {
+		t.Fatalf("unexpected extra fields: %+v", resp.Extra)
+	}
+}
+
+func TestModalScanFace_AcceptsBase64AndVideoDuration(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/face/scan" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		body := extractBody(t, r)
+		if body["img_base64"] != "abc123" {
+			t.Fatalf("unexpected img_base64: %v", body["img_base64"])
+		}
+		if body["is_video"] != float64(1) {
+			t.Fatalf("unexpected is_video: %v", body["is_video"])
+		}
+		if body["duration"] != 12.5 {
+			t.Fatalf("unexpected duration: %v", body["duration"])
+		}
+
+		writeJSON(w, 200, map[string]any{
+			"ok":             true,
+			"video_duration": 12.5,
+		})
+	})
+
+	resp, err := client.Modal.ScanFace(context.Background(), sa.FaceScanRequest{
+		ImgBase64: "abc123",
+		IsVideo:   1,
+		Duration:  12.5,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Extra["video_duration"] != 12.5 {
+		t.Fatalf("unexpected extra fields: %+v", resp.Extra)
+	}
+}
+
+func TestModalScanFace_RequiresURIOrBase64(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("request should not be sent: %s %s", r.Method, r.URL.Path)
+	})
+
+	_, err := client.Modal.ScanFace(context.Background(), sa.FaceScanRequest{
+		URI:       " ",
+		ImgBase64: " ",
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 func TestMediaWait_Completes(t *testing.T) {
 	var polls atomic.Int32
 

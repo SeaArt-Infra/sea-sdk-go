@@ -69,6 +69,7 @@ if err != nil {
 - `client.Modal.SearchModels(...)`
 - `client.Modal.GetModelSkill(...)`
 - `client.Modal.ScanImage(...)`
+- `client.Modal.ScanFace(...)`
 - `task.Wait(...)`
 
 ### 原始透传请求
@@ -232,6 +233,24 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
 | `sa.ImageScanRiskTypeErotic` | `EROTIC` | 色情、裸露、性暗示等成人内容 |
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
+
+### 人脸检测
+
+人脸检测接口复用 `ModelBaseURL`，对应 `POST /v1/face/scan`，由 openresty 转发到 inference-gateway，再转发到上游 `/cloud/face/scan`。
+
+```go
+resp, err := client.Modal.ScanFace(ctx, sa.FaceScanRequest{
+    URI:     "https://example.com/image.jpg",
+    IsVideo: 0,
+    Scene:   "avatar",
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.OK, resp.Usage)
+```
+
+也可以传 `ImgBase64`。视频检测时设置 `IsVideo: 1`，并可传 `Duration` 用于计费。上游人脸检测返回结构会保留在 `resp.Extra`，网关注入的计费信息在 `resp.Usage`。
 
 ## Passthrough API
 

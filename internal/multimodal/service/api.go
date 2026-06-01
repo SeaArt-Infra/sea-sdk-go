@@ -20,6 +20,8 @@ const (
 	PathModelSkill       = "/v1/models/skill/"
 	// PathImageScan is the content-safety scan endpoint used for images, GIFs, and videos.
 	PathImageScan = "/v1/image/scan"
+	// PathFaceScan is the face-detection scan endpoint used for images and videos.
+	PathFaceScan = "/v1/face/scan"
 )
 
 func CreateTask(client *transport.Client, ctx context.Context, body any, headers http.Header) (*mmtypes.GenerationResponse, error) {
@@ -106,6 +108,29 @@ func ScanImage(client *transport.Client, ctx context.Context, req mmtypes.ImageS
 	}
 
 	var resp mmtypes.ImageScanResponse
+	if err := decode(payload, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ScanFace sends an image or video face-detection scan request to PathFaceScan.
+func ScanFace(client *transport.Client, ctx context.Context, req mmtypes.FaceScanRequest, headers http.Header) (*mmtypes.FaceScanResponse, error) {
+	req.URI = strings.TrimSpace(req.URI)
+	req.ImgBase64 = strings.TrimSpace(req.ImgBase64)
+	if req.URI == "" && req.ImgBase64 == "" {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "uri or img_base64 is required"}
+	}
+
+	status, payload, err := client.Request(ctx, http.MethodPost, PathFaceScan, req, headers)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, httpError(status, payload)
+	}
+
+	var resp mmtypes.FaceScanResponse
 	if err := decode(payload, &resp); err != nil {
 		return nil, err
 	}
