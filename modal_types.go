@@ -71,6 +71,21 @@ type TextScanRequest = mmtypes.TextScanRequest
 // TextScanResponse is the parsed response returned by POST /v1/text/scan.
 type TextScanResponse = mmtypes.TextScanResponse
 
+// TextScanData contains text moderation results.
+type TextScanData = mmtypes.TextScanData
+
+// TextScanSensitiveWord describes one sensitive-word match.
+type TextScanSensitiveWord = mmtypes.TextScanSensitiveWord
+
+// TextScanStatus contains the upstream business status.
+type TextScanStatus = mmtypes.TextScanStatus
+
+// TextScanAreaType selects which regional sensitive-word rules are applied.
+type TextScanAreaType = mmtypes.TextScanAreaType
+
+// TextScanWay selects the sensitive-word checking strategy.
+type TextScanWay = mmtypes.TextScanWay
+
 // FaceScanRequest is the request body for POST /v1/face/scan.
 type FaceScanRequest = mmtypes.FaceScanRequest
 
@@ -90,6 +105,22 @@ const (
 	ImageScanRiskTypeViolent = mmtypes.ImageScanRiskTypeViolent
 	// ImageScanRiskTypeChild detects child-safety risks, especially sexualized or unsafe child-related content.
 	ImageScanRiskTypeChild = mmtypes.ImageScanRiskTypeChild
+
+	// TextScanAreaTypeAll checks both domestic and foreign regional rule sets.
+	TextScanAreaTypeAll = mmtypes.TextScanAreaTypeAll
+	// TextScanAreaTypeDomestic checks the domestic regional rule set.
+	TextScanAreaTypeDomestic = mmtypes.TextScanAreaTypeDomestic
+	// TextScanAreaTypeForeign checks the foreign regional rule set.
+	TextScanAreaTypeForeign = mmtypes.TextScanAreaTypeForeign
+
+	// TextScanWayDictionary uses dictionary matching. This is the upstream default.
+	TextScanWayDictionary = mmtypes.TextScanWayDictionary
+	// TextScanWayModel uses the big-data model checker.
+	TextScanWayModel = mmtypes.TextScanWayModel
+	// TextScanWayMixed uses both dictionary and model checks.
+	TextScanWayMixed = mmtypes.TextScanWayMixed
+	// TextScanWayCharacter uses the digital-human checker.
+	TextScanWayCharacter = mmtypes.TextScanWayCharacter
 )
 
 func (r TaskCreateRequest) Raw() JSONMap {

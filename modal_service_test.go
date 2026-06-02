@@ -361,22 +361,28 @@ func TestModalScanText_PostsTextScanRequest(t *testing.T) {
 			t.Fatalf("unexpected scene: %v", body["scene"])
 		}
 		areaTypes := body["area_types"].([]any)
-		if len(areaTypes) != 2 || areaTypes[0] != float64(1) || areaTypes[1] != float64(2) {
+		if len(areaTypes) != 1 || areaTypes[0] != float64(2) {
 			t.Fatalf("unexpected area_types: %v", areaTypes)
 		}
-		if body["way"] != float64(2) {
+		if body["way"] != float64(0) {
 			t.Fatalf("unexpected way: %v", body["way"])
-		}
-		scenes := body["scenes"].([]any)
-		if len(scenes) != 1 || scenes[0] != "prompt" {
-			t.Fatalf("unexpected scenes: %v", scenes)
 		}
 
 		writeJSON(w, 200, map[string]any{
-			"code":    0,
-			"message": "ok",
-			"result": map[string]any{
-				"pass": true,
+			"data": map[string]any{
+				"sensitive_words": []map[string]any{
+					{
+						"word":           "blocked",
+						"start_index":    2,
+						"end_index":      8,
+						"risk_type_code": "political",
+					},
+				},
+			},
+			"status": map[string]any{
+				"code":       10000,
+				"msg":        "success",
+				"request_id": "risk-req-1",
 			},
 			"usage": map[string]any{
 				"cost": "0.003",
@@ -387,22 +393,27 @@ func TestModalScanText_PostsTextScanRequest(t *testing.T) {
 	resp, err := client.Modal.ScanText(context.Background(), sa.TextScanRequest{
 		Text:      "a prompt to check",
 		Scene:     1,
-		AreaTypes: []int{1, 2},
-		Way:       2,
-		Scenes:    []string{"prompt"},
+		AreaTypes: []sa.TextScanAreaType{sa.TextScanAreaTypeForeign},
+		Way:       sa.TextScanWayDictionary,
 	}, sa.WithHeader("X-Trace-Id", "trace-text"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if resp.Status == nil || resp.Status.Code != 10000 || resp.Status.RequestID != "risk-req-1" {
+		t.Fatalf("unexpected status: %+v", resp.Status)
+	}
+	if resp.Data == nil || len(resp.Data.SensitiveWords) != 1 {
+		t.Fatalf("unexpected data: %+v", resp.Data)
+	}
+	word := resp.Data.SensitiveWords[0]
+	if word.Word != "blocked" || word.StartIndex != 2 || word.EndIndex != 8 || word.RiskTypeCode != "political" {
+		t.Fatalf("unexpected sensitive word: %+v", word)
+	}
 	if resp.Usage == nil || resp.Usage.Cost.String() != "0.003" {
 		t.Fatalf("unexpected usage: %+v", resp.Usage)
 	}
-	if resp.Extra["code"] != float64(0) {
+	if len(resp.Extra) != 0 {
 		t.Fatalf("unexpected extra fields: %+v", resp.Extra)
-	}
-	result := resp.Extra["result"].(map[string]any)
-	if result["pass"] != true {
-		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 

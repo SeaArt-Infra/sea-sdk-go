@@ -183,29 +183,91 @@ type ImageScanFrameResult struct {
 	RiskTypes []ImageScanRiskType `json:"risk_types,omitempty"`
 }
 
+// TextScanAreaType selects which regional sensitive-word rules are applied.
+type TextScanAreaType int
+
+const (
+	// TextScanAreaTypeAll checks both domestic and foreign regional rule sets.
+	TextScanAreaTypeAll TextScanAreaType = 0
+	// TextScanAreaTypeDomestic checks the domestic regional rule set.
+	TextScanAreaTypeDomestic TextScanAreaType = 1
+	// TextScanAreaTypeForeign checks the foreign regional rule set.
+	TextScanAreaTypeForeign TextScanAreaType = 2
+)
+
+// TextScanWay selects the sensitive-word checking strategy.
+type TextScanWay int
+
+const (
+	// TextScanWayDictionary uses dictionary matching. This is the upstream default.
+	TextScanWayDictionary TextScanWay = 0
+	// TextScanWayModel uses the big-data model checker.
+	TextScanWayModel TextScanWay = 1
+	// TextScanWayMixed uses both dictionary and model checks.
+	TextScanWayMixed TextScanWay = 2
+	// TextScanWayCharacter uses the digital-human checker.
+	TextScanWayCharacter TextScanWay = 3
+)
+
 // TextScanRequest is the request body for POST /v1/text/scan.
 type TextScanRequest struct {
 	// Text is the prompt or text content to scan for sensitive words.
 	Text string `json:"text"`
-	// Scene selects the upstream moderation scenario.
+	// Scene selects the upstream moderation scenario, for example 1 for search
+	// sensitive words and 2 for prompt sensitive words.
 	Scene int `json:"scene"`
-	// AreaTypes limits detection to the requested upstream area categories.
-	AreaTypes []int `json:"area_types,omitempty"`
-	// Way selects the upstream matching mode.
-	Way int `json:"way,omitempty"`
-	// Scenes contains additional upstream scene names.
+	// AreaTypes limits detection to regional rule sets: 0 checks both domestic
+	// and foreign rules, 1 checks domestic rules, and 2 checks foreign rules.
+	AreaTypes []TextScanAreaType `json:"area_types,omitempty"`
+	// Way selects the checking strategy. When omitted or set to 0, the upstream
+	// service uses dictionary matching.
+	Way TextScanWay `json:"way"`
+	// Scenes is currently unused by the upstream service. When provided, it
+	// overrides Scene.
 	Scenes []string `json:"scenes,omitempty"`
 }
 
 // TextScanResponse is the parsed response returned by POST /v1/text/scan.
 //
-// The upstream sensitive-word service owns most response fields, so Extra keeps
-// provider-specific fields available while Usage is decoded for gateway billing.
+// Extra keeps any upstream response fields that are not modeled by the SDK yet.
 type TextScanResponse struct {
+	// Data contains the sensitive words detected by the upstream service.
+	Data *TextScanData `json:"data,omitempty"`
+	// Status contains the upstream business status. Code 10000 means success.
+	Status *TextScanStatus `json:"status,omitempty"`
 	// Usage contains gateway billing metadata injected by inference-gateway.
 	Usage *Usage `json:"usage,omitempty"`
 	// Extra contains upstream response fields that are not modeled by the SDK yet.
 	Extra map[string]any `json:"-"`
+}
+
+// TextScanData contains text moderation results.
+type TextScanData struct {
+	// SensitiveWords contains every sensitive word matched by the service.
+	SensitiveWords []TextScanSensitiveWord `json:"sensitive_words,omitempty"`
+}
+
+// TextScanSensitiveWord describes one sensitive-word match.
+type TextScanSensitiveWord struct {
+	// Word is the matched sensitive word.
+	Word string `json:"word"`
+	// StartIndex is the rune-array start index of the matched word.
+	StartIndex int `json:"start_index"`
+	// EndIndex is the rune-array end index of the matched word.
+	EndIndex int `json:"end_index"`
+	// RiskTypeCode is the upstream risk category, for example political,
+	// violence, or porn.
+	RiskTypeCode string `json:"risk_type_code,omitempty"`
+}
+
+// TextScanStatus contains the upstream business status.
+type TextScanStatus struct {
+	// Code is the upstream status code. 10000 means success.
+	Code int `json:"code,omitempty"`
+	// Msg is the upstream status message.
+	Msg string `json:"msg,omitempty"`
+	// RequestID is the upstream request trace ID.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 func (r *TextScanResponse) UnmarshalJSON(data []byte) error {
@@ -220,6 +282,8 @@ func (r *TextScanResponse) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	delete(extra, "usage")
+	delete(extra, "data")
+	delete(extra, "status")
 
 	*r = TextScanResponse(typed)
 	r.Extra = extra

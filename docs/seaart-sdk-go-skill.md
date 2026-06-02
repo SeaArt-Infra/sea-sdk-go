@@ -171,18 +171,18 @@ fmt.Println(resp.OK, resp.NSFWLevel, resp.RiskTypes)
 resp, err := client.Modal.ScanText(ctx, sa.TextScanRequest{
     Text:      "prompt to check",
     Scene:     1,
-    AreaTypes: []int{1, 2},
-    Way:       2,
-    Scenes:    []string{"prompt"},
+    AreaTypes: []sa.TextScanAreaType{sa.TextScanAreaTypeForeign},
+    Way:       sa.TextScanWayDictionary,
 })
 if err != nil {
     log.Fatal(err)
 }
 fmt.Println(resp.Usage)
-fmt.Println(resp.Extra["result"])
+fmt.Println(resp.Status.Code, resp.Status.Msg)
+fmt.Println(resp.Data.SensitiveWords)
 ```
 
-上游返回中的未建模字段会保留在 `Extra`，网关注入的计费信息在 `Usage`。
+`AreaTypes` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`Way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `StartIndex` / `EndIndex` 基于 rune 数组，未建模字段会保留在 `Extra`。
 
 ### 人脸检测
 
