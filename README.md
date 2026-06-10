@@ -9,7 +9,7 @@ SeaArt AI 平台的 Go SDK，当前公开三类能力：
 ## 安装
 
 ```bash
-go get github.com/SeaVerseAI/sea-sdk-go
+go get github.com/SeaArt-Infra/sea-sdk-go
 ```
 
 要求：
