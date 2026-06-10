@@ -244,7 +244,11 @@ type TextScanResponse struct {
 // TextScanData contains text moderation results.
 type TextScanData struct {
 	// SensitiveWords contains every sensitive word matched by the service.
-	SensitiveWords []TextScanSensitiveWord `json:"sensitive_words,omitempty"`
+	SensitiveWords []TextScanSensitiveWord `json:"sensitive_words"`
+	// Combination contains upstream combination-rule details when a match is produced.
+	Combination any `json:"combination"`
+	// IsSensitive reports whether the scanned text matched sensitive content.
+	IsSensitive bool `json:"is_sensitive"`
 }
 
 // TextScanSensitiveWord describes one sensitive-word match.

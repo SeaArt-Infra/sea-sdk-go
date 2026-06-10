@@ -2,6 +2,7 @@ package sa_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -414,6 +415,68 @@ func TestModalScanText_PostsTextScanRequest(t *testing.T) {
 	}
 	if len(resp.Extra) != 0 {
 		t.Fatalf("unexpected extra fields: %+v", resp.Extra)
+	}
+}
+
+func TestModalScanText_PreservesEmptyResultFields(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/text/scan" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		writeJSON(w, 200, map[string]any{
+			"data": map[string]any{
+				"sensitive_words": []map[string]any{},
+				"combination":     nil,
+				"is_sensitive":    false,
+			},
+			"status": map[string]any{
+				"code":       10000,
+				"msg":        "success",
+				"request_id": "risk-empty",
+			},
+			"usage": map[string]any{
+				"cost": "1",
+			},
+		})
+	})
+
+	resp, err := client.Modal.ScanText(context.Background(), sa.TextScanRequest{
+		Text:      "clean prompt",
+		Scene:     1,
+		AreaTypes: []sa.TextScanAreaType{sa.TextScanAreaTypeDomestic, sa.TextScanAreaTypeForeign},
+		Way:       sa.TextScanWayDictionary,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Data == nil {
+		t.Fatal("expected data, got nil")
+	}
+	if len(resp.Data.SensitiveWords) != 0 {
+		t.Fatalf("unexpected sensitive words: %+v", resp.Data.SensitiveWords)
+	}
+	if resp.Data.IsSensitive {
+		t.Fatal("expected is_sensitive=false")
+	}
+
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatalf("unmarshal encoded response: %v", err)
+	}
+	data := payload["data"].(map[string]any)
+	if words, ok := data["sensitive_words"].([]any); !ok || len(words) != 0 {
+		t.Fatalf("expected empty sensitive_words array, got %#v", data["sensitive_words"])
+	}
+	if _, ok := data["combination"]; !ok {
+		t.Fatalf("expected combination field, got %#v", data)
+	}
+	if sensitive, ok := data["is_sensitive"].(bool); !ok || sensitive {
+		t.Fatalf("expected is_sensitive=false, got %#v", data["is_sensitive"])
 	}
 }
 

@@ -202,10 +202,12 @@ if err != nil {
 
 fmt.Println(resp.Usage)
 fmt.Println(resp.Status.Code, resp.Status.Msg)
+fmt.Println(resp.Data.IsSensitive)
 fmt.Println(resp.Data.SensitiveWords)
+fmt.Println(resp.Data.Combination)
 ```
 
-`AreaTypes` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`Way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `StartIndex` / `EndIndex` 基于 rune 数组，未建模字段会保留在 `Extra`。
+`AreaTypes` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`Way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `StartIndex` / `EndIndex` 基于 rune 数组；`IsSensitive` 表示整体是否命中敏感内容，`Combination` 保留组合规则命中详情，未建模字段会保留在 `Extra`。
 
 ### 人脸检测
 
