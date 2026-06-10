@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	sa "github.com/SeaVerseAI/sea-sdk-go"
+	sa "github.com/SeaArt-Infra/sea-sdk-go"
 )
 
 func TestMediaCreate_SubmitsRawBody(t *testing.T) {

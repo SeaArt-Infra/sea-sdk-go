@@ -3,7 +3,7 @@ package volces
 import (
 	"fmt"
 
-	mmtypes "github.com/SeaVerseAI/sea-sdk-go/internal/multimodal/types"
+	mmtypes "github.com/SeaArt-Infra/sea-sdk-go/internal/multimodal/types"
 )
 
 type Factory struct{}

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	sa "github.com/SeaVerseAI/sea-sdk-go"
+	sa "github.com/SeaArt-Infra/sea-sdk-go"
 )
 
 func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *sa.Client) {

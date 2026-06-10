@@ -1,3 +1,3 @@
-module github.com/SeaVerseAI/sea-sdk-go
+module github.com/SeaArt-Infra/sea-sdk-go
 
 go 1.22.12

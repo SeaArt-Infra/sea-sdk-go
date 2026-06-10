@@ -1,8 +1,8 @@
 package sa
 
 import (
-	mmtypes "github.com/SeaVerseAI/sea-sdk-go/internal/multimodal/types"
-	"github.com/SeaVerseAI/sea-sdk-go/internal/transport"
+	mmtypes "github.com/SeaArt-Infra/sea-sdk-go/internal/multimodal/types"
+	"github.com/SeaArt-Infra/sea-sdk-go/internal/transport"
 )
 
 type TaskCreateRequest struct {
