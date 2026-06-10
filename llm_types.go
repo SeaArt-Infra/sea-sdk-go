@@ -3,7 +3,7 @@ package sa
 import (
 	"encoding/json"
 
-	llmtypes "github.com/SeaVerseAI/sea-sdk-go/internal/llm/types"
+	llmtypes "github.com/SeaArt-Infra/sea-sdk-go/internal/llm/types"
 )
 
 type JSONMap = llmtypes.JSONMap

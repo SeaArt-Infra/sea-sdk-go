@@ -22,7 +22,7 @@ tags:
 4. 流式接口推荐配合 `MessagesStreamTextAssembler` / `ResponsesStreamTextAssembler` 使用
 5. 错误处理建议断言为 `*sa.Error` 并按 `Kind` 分类处理（ErrAuth/ErrQuota/ErrTimeout/ErrTaskFailed）
 
-**输出格式：** 直接给出可运行的 Go 代码片段，附简短说明。代码使用标准导入 `sa "github.com/SeaVerseAI/sea-sdk-go"`。
+**输出格式：** 直接给出可运行的 Go 代码片段，附简短说明。代码使用标准导入 `sa "github.com/SeaArt-Infra/sea-sdk-go"`。
 
 ---
 
@@ -35,7 +35,7 @@ SeaArt Go SDK（`sa-go`）是 SeaArt AI 平台的官方 Go 客户端库，提供
 ## 安装
 
 ```bash
-go get github.com/SeaVerseAI/sea-sdk-go
+go get github.com/SeaArt-Infra/sea-sdk-go
 ```
 
 ## 客户端配置
@@ -368,7 +368,7 @@ import (
     "fmt"
     "log"
 
-    sa "github.com/SeaVerseAI/sea-sdk-go"
+    sa "github.com/SeaArt-Infra/sea-sdk-go"
 )
 
 func main() {

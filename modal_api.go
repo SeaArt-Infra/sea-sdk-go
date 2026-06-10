@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 
-	mmservice "github.com/SeaVerseAI/sea-sdk-go/internal/multimodal/service"
-	mmtypes "github.com/SeaVerseAI/sea-sdk-go/internal/multimodal/types"
-	"github.com/SeaVerseAI/sea-sdk-go/internal/transport"
+	mmservice "github.com/SeaArt-Infra/sea-sdk-go/internal/multimodal/service"
+	mmtypes "github.com/SeaArt-Infra/sea-sdk-go/internal/multimodal/types"
+	"github.com/SeaArt-Infra/sea-sdk-go/internal/transport"
 )
 
 func (m *ModalService) Create(ctx context.Context, body JSONMap, opts ...RequestOption) (*Task, error) {

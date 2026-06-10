@@ -1,6 +1,6 @@
 package sa
 
-import "github.com/SeaVerseAI/sea-sdk-go/internal/shared"
+import "github.com/SeaArt-Infra/sea-sdk-go/internal/shared"
 
 const (
 	ErrAuth       = shared.ErrAuth

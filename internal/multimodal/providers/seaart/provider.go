@@ -1,6 +1,6 @@
 package seaart
 
-import mmtypes "github.com/SeaVerseAI/sea-sdk-go/internal/multimodal/types"
+import mmtypes "github.com/SeaArt-Infra/sea-sdk-go/internal/multimodal/types"
 
 const VerSDXL = "c9090ffbe5649de2f34cfe5b865d50fe"
 

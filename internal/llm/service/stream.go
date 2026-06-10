@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 
-	llmtypes "github.com/SeaVerseAI/sea-sdk-go/internal/llm/types"
-	"github.com/SeaVerseAI/sea-sdk-go/internal/shared"
-	"github.com/SeaVerseAI/sea-sdk-go/internal/transport"
+	llmtypes "github.com/SeaArt-Infra/sea-sdk-go/internal/llm/types"
+	"github.com/SeaArt-Infra/sea-sdk-go/internal/shared"
+	"github.com/SeaArt-Infra/sea-sdk-go/internal/transport"
 )
 
 func ChatCompletionsStream(client *transport.Client, ctx context.Context, payload llmtypes.JSONMap, headers http.Header) (<-chan llmtypes.StreamEvent, error) {

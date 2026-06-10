@@ -1,6 +1,6 @@
 package kling
 
-import mmtypes "github.com/SeaVerseAI/sea-sdk-go/internal/multimodal/types"
+import mmtypes "github.com/SeaArt-Infra/sea-sdk-go/internal/multimodal/types"
 
 type Factory struct{}
 

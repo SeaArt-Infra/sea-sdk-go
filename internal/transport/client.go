@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/SeaVerseAI/sea-sdk-go/internal/shared"
+	"github.com/SeaArt-Infra/sea-sdk-go/internal/shared"
 )
 
 // Client owns the shared HTTP transport state used by service packages.
