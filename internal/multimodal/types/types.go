@@ -43,6 +43,26 @@ type GenerationResponse struct {
 	Error     *APIError `json:"error,omitempty"`
 }
 
+// PrechargeResponse is returned by POST /v1/generation/precharge.
+type PrechargeResponse struct {
+	Data   *PrechargeData `json:"data,omitempty"`
+	Status string         `json:"status"`
+}
+
+// PrechargeData contains the billing preview returned by precharge.
+type PrechargeData struct {
+	BillingModel  string       `json:"billing_model,omitempty"`
+	Cost          *json.Number `json:"cost,omitempty"`
+	Currency      string       `json:"currency,omitempty"`
+	Discount      float64      `json:"discount,omitempty"`
+	Hash          string       `json:"hash,omitempty"`
+	Model         string       `json:"model,omitempty"`
+	OriginalModel string       `json:"original_model,omitempty"`
+	SampleCount   int          `json:"sample_count,omitempty"`
+	UpdatedAt     int64        `json:"updated_at,omitempty"`
+	Reason        string       `json:"reason,omitempty"`
+}
+
 // TaskResponse is returned by GET /v1/generation/task/{id}.
 type TaskResponse struct {
 	ID        string        `json:"id"`

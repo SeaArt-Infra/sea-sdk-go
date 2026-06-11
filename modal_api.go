@@ -23,6 +23,12 @@ func (m *ModalService) Create(ctx context.Context, body JSONMap, opts ...Request
 	}, nil
 }
 
+// Precharge queries the billing preview via POST /v1/generation/precharge.
+// The request body shape is the same as Create.
+func (m *ModalService) Precharge(ctx context.Context, body JSONMap, opts ...RequestOption) (*PrechargeResponse, error) {
+	return mmservice.Precharge(m.client, ctx, body, buildRequestOptions(opts).headers)
+}
+
 // ListModels searches multimodal model skills via GET /v1/models/skill/search.
 //
 // Supported params:

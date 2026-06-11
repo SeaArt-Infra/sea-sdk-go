@@ -21,36 +21,49 @@ func TestMediaCreate_SubmitsRawBody(t *testing.T) {
 		}
 
 		body := extractBody(t, r)
-		if body["model"] != "vidu_q3_reference" {
+		if body["model"] != "alibaba_wanx26_i2v_flash" {
 			t.Fatalf("unexpected model: %v", body["model"])
 		}
+		if body["moderation"] != true {
+			t.Fatalf("unexpected moderation: %v", body["moderation"])
+		}
 
-		params := body["parameters"].(map[string]any)
-		if params["duration"] != float64(5) {
-			t.Fatalf("unexpected duration: %v", params["duration"])
+		input := body["input"].([]any)
+		params := input[0].(map[string]any)["params"].(map[string]any)
+		modelInput := params["input"].(map[string]any)
+		if modelInput["img_url"] != "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg" {
+			t.Fatalf("unexpected img_url: %v", modelInput["img_url"])
+		}
+		parameters := params["parameters"].(map[string]any)
+		if parameters["duration"] != float64(5) {
+			t.Fatalf("unexpected duration: %v", parameters["duration"])
 		}
 
 		writeJSON(w, 200, map[string]any{
 			"id":     "task_create",
 			"status": "in_progress",
-			"model":  "vidu_q3_reference",
+			"model":  "alibaba_wanx26_i2v_flash",
 		})
 	})
 
 	task, err := client.Modal.Create(context.Background(), sa.JSONMap{
-		"model": "vidu_q3_reference",
+		"moderation": true,
+		"model":      "alibaba_wanx26_i2v_flash",
 		"input": []map[string]any{
 			{
-				"type": "message",
-				"role": "user",
-				"content": []map[string]any{
-					{"type": "text", "text": "cinematic shot"},
-					{"type": "image_url", "url": "https://example.com/ref1.webp"},
+				"params": map[string]any{
+					"input": map[string]any{
+						"img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+						"prompt":  "小狗和女孩在秋天的公园里快乐地玩耍",
+					},
+					"parameters": map[string]any{
+						"resolution":    "720P",
+						"duration":      5,
+						"prompt_extend": true,
+						"watermark":     false,
+					},
 				},
 			},
-		},
-		"parameters": map[string]any{
-			"duration": 5,
 		},
 	}, sa.WithHeader("X-Trace-Id", "trace-123"))
 	if err != nil {
@@ -62,8 +75,118 @@ func TestMediaCreate_SubmitsRawBody(t *testing.T) {
 	if task.Status != "in_progress" {
 		t.Fatalf("unexpected status: %s", task.Status)
 	}
-	if task.Model != "vidu_q3_reference" {
+	if task.Model != "alibaba_wanx26_i2v_flash" {
 		t.Fatalf("unexpected model: %s", task.Model)
+	}
+}
+
+func TestModalPrecharge_ReturnsBillingPreview(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/v1/generation/precharge" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		body := extractBody(t, r)
+		if body["id"] != "d88pmute87128c73e9r0d0" {
+			t.Fatalf("unexpected id: %v", body["id"])
+		}
+		if body["model"] != "volces_seedream_4_5" {
+			t.Fatalf("unexpected model: %v", body["model"])
+		}
+		if body["moderation"] != false {
+			t.Fatalf("unexpected moderation: %v", body["moderation"])
+		}
+		input := body["input"].([]any)
+		params := input[0].(map[string]any)["params"].(map[string]any)
+		if params["prompt"] != "A dog" {
+			t.Fatalf("unexpected prompt: %v", params["prompt"])
+		}
+
+		writeJSON(w, 200, map[string]any{
+			"data": map[string]any{
+				"billing_model":  "volces_seedream_4_5",
+				"cost":           "0.035714285714",
+				"currency":       "USD",
+				"discount":       0.7,
+				"hash":           "v1:18a733f04d227d572950ed8f1f98a9ba4cd37c168c5c98c05a5e574984f58eaf",
+				"model":          "volces_seedream_4_5",
+				"original_model": "volces_seedream_4_5",
+				"sample_count":   4,
+				"updated_at":     1780633394064,
+			},
+			"status": "success",
+		})
+	})
+
+	resp, err := client.Modal.Precharge(context.Background(), sa.JSONMap{
+		"id":         "d88pmute87128c73e9r0d0",
+		"model":      "volces_seedream_4_5",
+		"input":      []map[string]any{{"params": map[string]any{"prompt": "A dog"}}},
+		"moderation": false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Status != "success" {
+		t.Fatalf("unexpected status: %s", resp.Status)
+	}
+	if resp.Data == nil {
+		t.Fatal("expected precharge data")
+	}
+	if resp.Data.BillingModel != "volces_seedream_4_5" {
+		t.Fatalf("unexpected billing model: %s", resp.Data.BillingModel)
+	}
+	if resp.Data.Cost == nil || resp.Data.Cost.String() != "0.035714285714" {
+		t.Fatalf("unexpected cost: %v", resp.Data.Cost)
+	}
+	if resp.Data.Currency != "USD" {
+		t.Fatalf("unexpected currency: %s", resp.Data.Currency)
+	}
+	if resp.Data.SampleCount != 4 {
+		t.Fatalf("unexpected sample count: %d", resp.Data.SampleCount)
+	}
+}
+
+func TestModalPrecharge_SupportsCacheMissResponse(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/generation/precharge" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, 200, map[string]any{
+			"data": map[string]any{
+				"cost":           nil,
+				"hash":           "v1:02833b68895eeb61bf214d35fd669502ef788e4c8d58505893414ae9632ca8ab",
+				"model":          "volces_seedream_4_5",
+				"original_model": "volces_seedream_4_5",
+				"reason":         "COST_CACHE_MISS",
+			},
+			"status": "failed",
+		})
+	})
+
+	resp, err := client.Modal.Precharge(context.Background(), sa.JSONMap{
+		"id":         "d88pmute87128c73e9r0d0",
+		"model":      "volces_seedream_4_5",
+		"input":      []map[string]any{{"params": map[string]any{"prompt": "A dog"}}},
+		"moderation": false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Status != "failed" {
+		t.Fatalf("unexpected status: %s", resp.Status)
+	}
+	if resp.Data == nil {
+		t.Fatal("expected precharge data")
+	}
+	if resp.Data.Cost != nil {
+		t.Fatalf("expected nil cost, got %v", resp.Data.Cost)
+	}
+	if resp.Data.Reason != "COST_CACHE_MISS" {
+		t.Fatalf("unexpected reason: %s", resp.Data.Reason)
 	}
 }
 
@@ -725,19 +848,74 @@ func TestMediaWait_FailedTask(t *testing.T) {
 }
 
 func TestTaskBuilderBuildsGenericRequest(t *testing.T) {
-	body := sa.NewTask("vidu_q3_reference").
-		User(
-			sa.Text("cinematic shot"),
-			sa.ImageURL("https://example.com/ref1.webp"),
-		).
-		Param("duration", 5).
+	body := sa.NewTask("alibaba_wanx26_i2v_flash").
+		Moderation(true).
+		Params(map[string]any{
+			"input": map[string]any{
+				"img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+				"prompt":  "小狗和女孩在秋天的公园里快乐地玩耍",
+			},
+			"parameters": map[string]any{
+				"resolution":    "720P",
+				"duration":      5,
+				"prompt_extend": true,
+				"watermark":     false,
+			},
+		}).
 		Metadata("trace_id", "trace-123").
 		Build()
 
-	if body["model"] != "vidu_q3_reference" {
+	if body["model"] != "alibaba_wanx26_i2v_flash" {
 		t.Fatalf("unexpected model: %v", body["model"])
+	}
+	if body["moderation"] != true {
+		t.Fatalf("unexpected moderation: %v", body["moderation"])
+	}
+	input := body["input"].([]map[string]any)
+	params := input[0]["params"].(map[string]any)
+	modelInput := params["input"].(map[string]any)
+	if modelInput["img_url"] != "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg" {
+		t.Fatalf("unexpected img_url: %v", modelInput["img_url"])
+	}
+	parameters := params["parameters"].(map[string]any)
+	if parameters["duration"] != 5 {
+		t.Fatalf("unexpected duration: %v", parameters["duration"])
 	}
 	if body["metadata"].(map[string]any)["trace_id"] != "trace-123" {
 		t.Fatalf("unexpected metadata: %v", body["metadata"])
+	}
+}
+
+func TestTaskBuilderSupportsFlatParamsAndTopLevelFields(t *testing.T) {
+	body := sa.NewTask("grok_imagine_image").
+		Field("dash_scope", true).
+		Moderation(true).
+		Params(map[string]any{
+			"aspect_ratio": "1:2",
+			"prompt":       "Lego art version of Superman and Batman，Night scene",
+			"n":            1,
+			"resolution":   "1k",
+		}).
+		Build()
+
+	if body["dash_scope"] != true {
+		t.Fatalf("unexpected dash_scope: %v", body["dash_scope"])
+	}
+	if body["moderation"] != true {
+		t.Fatalf("unexpected moderation: %v", body["moderation"])
+	}
+	input := body["input"].([]map[string]any)
+	params := input[0]["params"].(map[string]any)
+	if params["aspect_ratio"] != "1:2" {
+		t.Fatalf("unexpected aspect ratio: %v", params["aspect_ratio"])
+	}
+	if params["prompt"] != "Lego art version of Superman and Batman，Night scene" {
+		t.Fatalf("unexpected prompt: %v", params["prompt"])
+	}
+	if params["n"] != 1 {
+		t.Fatalf("unexpected n: %v", params["n"])
+	}
+	if params["resolution"] != "1k" {
+		t.Fatalf("unexpected resolution: %v", params["resolution"])
 	}
 }
