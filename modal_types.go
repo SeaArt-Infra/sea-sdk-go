@@ -6,31 +6,13 @@ import (
 )
 
 type TaskCreateRequest struct {
-	Model      string         `json:"model"`
-	Input      []InputItem    `json:"input,omitempty"`
-	Parameters map[string]any `json:"parameters,omitempty"`
-	Metadata   map[string]any `json:"metadata,omitempty"`
-	Options    map[string]any `json:"options,omitempty"`
-}
-
-type InputItem struct {
-	Type    string         `json:"type,omitempty"`
-	Role    string         `json:"role,omitempty"`
-	Text    string         `json:"text,omitempty"`
-	URL     string         `json:"url,omitempty"`
-	FileID  string         `json:"file_id,omitempty"`
-	MIME    string         `json:"mime,omitempty"`
-	Content []ContentPart  `json:"content,omitempty"`
-	Extra   map[string]any `json:"extra,omitempty"`
-}
-
-type ContentPart struct {
-	Type  string         `json:"type"`
-	Text  string         `json:"text,omitempty"`
-	URL   string         `json:"url,omitempty"`
-	ID    string         `json:"file_id,omitempty"`
-	MIME  string         `json:"mime,omitempty"`
-	Extra map[string]any `json:"extra,omitempty"`
+	Model         string         `json:"model"`
+	Params        map[string]any `json:"-"`
+	Parameters    map[string]any `json:"-"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+	Options       map[string]any `json:"options,omitempty"`
+	Moderation    *bool          `json:"moderation,omitempty"`
+	ExtraTopLevel map[string]any `json:"-"`
 }
 
 type Task struct {
@@ -95,6 +77,8 @@ type FaceScanResponse = mmtypes.FaceScanResponse
 type ModalModelSearchParams = mmtypes.ModelSearchParams
 type ModalModelSearchResponse = mmtypes.ModelSearchResponse
 type ModalModelSearchHit = mmtypes.ModelSearchHit
+type PrechargeResponse = mmtypes.PrechargeResponse
+type PrechargeData = mmtypes.PrechargeData
 
 const (
 	// ImageScanRiskTypePolity detects political or public-safety sensitive content.
@@ -127,62 +111,23 @@ func (r TaskCreateRequest) Raw() JSONMap {
 	body := JSONMap{
 		"model": r.Model,
 	}
-	if len(r.Input) > 0 {
-		input := make([]map[string]any, 0, len(r.Input))
-		for _, item := range r.Input {
-			entry := make(map[string]any)
-			if item.Type != "" {
-				entry["type"] = item.Type
-			}
-			if item.Role != "" {
-				entry["role"] = item.Role
-			}
-			if item.Text != "" {
-				entry["text"] = item.Text
-			}
-			if item.URL != "" {
-				entry["url"] = item.URL
-			}
-			if item.FileID != "" {
-				entry["file_id"] = item.FileID
-			}
-			if item.MIME != "" {
-				entry["mime"] = item.MIME
-			}
-			if len(item.Content) > 0 {
-				content := make([]map[string]any, 0, len(item.Content))
-				for _, part := range item.Content {
-					partEntry := map[string]any{
-						"type": part.Type,
-					}
-					if part.Text != "" {
-						partEntry["text"] = part.Text
-					}
-					if part.URL != "" {
-						partEntry["url"] = part.URL
-					}
-					if part.ID != "" {
-						partEntry["file_id"] = part.ID
-					}
-					if part.MIME != "" {
-						partEntry["mime"] = part.MIME
-					}
-					if len(part.Extra) > 0 {
-						partEntry["extra"] = part.Extra
-					}
-					content = append(content, partEntry)
-				}
-				entry["content"] = content
-			}
-			if len(item.Extra) > 0 {
-				entry["extra"] = item.Extra
-			}
-			input = append(input, entry)
-		}
-		body["input"] = input
+	if r.Moderation != nil {
+		body["moderation"] = *r.Moderation
 	}
+	params := cloneMap(r.Params)
 	if len(r.Parameters) > 0 {
-		body["parameters"] = r.Parameters
+		if existing, ok := params["parameters"].(map[string]any); ok {
+			merged := cloneMap(existing)
+			for key, value := range r.Parameters {
+				merged[key] = value
+			}
+			params["parameters"] = merged
+		} else {
+			params["parameters"] = cloneMap(r.Parameters)
+		}
+	}
+	if len(params) > 0 {
+		body["input"] = []map[string]any{{"params": params}}
 	}
 	if len(r.Metadata) > 0 {
 		body["metadata"] = r.Metadata
@@ -190,7 +135,21 @@ func (r TaskCreateRequest) Raw() JSONMap {
 	if len(r.Options) > 0 {
 		body["options"] = r.Options
 	}
+	for key, value := range r.ExtraTopLevel {
+		body[key] = value
+	}
 	return body
+}
+
+func cloneMap(src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return map[string]any{}
+	}
+	dst := make(map[string]any, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
 }
 
 type TaskBuilder struct {
@@ -200,21 +159,18 @@ type TaskBuilder struct {
 func NewTask(model string) *TaskBuilder {
 	return &TaskBuilder{
 		req: TaskCreateRequest{
-			Model:      model,
-			Parameters: map[string]any{},
-			Metadata:   map[string]any{},
-			Options:    map[string]any{},
+			Model:         model,
+			Params:        map[string]any{},
+			Parameters:    map[string]any{},
+			Metadata:      map[string]any{},
+			Options:       map[string]any{},
+			ExtraTopLevel: map[string]any{},
 		},
 	}
 }
 
-func (b *TaskBuilder) Input(item InputItem) *TaskBuilder {
-	b.req.Input = append(b.req.Input, item)
-	return b
-}
-
-func (b *TaskBuilder) User(parts ...ContentPart) *TaskBuilder {
-	b.req.Input = append(b.req.Input, User(parts...))
+func (b *TaskBuilder) Params(value map[string]any) *TaskBuilder {
+	b.req.Params = cloneMap(value)
 	return b
 }
 
@@ -242,30 +198,19 @@ func (b *TaskBuilder) Option(key string, value any) *TaskBuilder {
 	return b
 }
 
+func (b *TaskBuilder) Moderation(value bool) *TaskBuilder {
+	b.req.Moderation = &value
+	return b
+}
+
+func (b *TaskBuilder) Field(key string, value any) *TaskBuilder {
+	if b.req.ExtraTopLevel == nil {
+		b.req.ExtraTopLevel = map[string]any{}
+	}
+	b.req.ExtraTopLevel[key] = value
+	return b
+}
+
 func (b *TaskBuilder) Build() JSONMap {
 	return b.req.Raw()
-}
-
-func Text(text string) ContentPart {
-	return ContentPart{Type: "text", Text: text}
-}
-
-func ImageURL(url string) ContentPart {
-	return ContentPart{Type: "image_url", URL: url}
-}
-
-func VideoURL(url string) ContentPart {
-	return ContentPart{Type: "video_url", URL: url}
-}
-
-func AudioURL(url string) ContentPart {
-	return ContentPart{Type: "audio_url", URL: url}
-}
-
-func FileID(id string) ContentPart {
-	return ContentPart{Type: "file_id", ID: id}
-}
-
-func User(parts ...ContentPart) InputItem {
-	return InputItem{Type: "message", Role: "user", Content: parts}
 }

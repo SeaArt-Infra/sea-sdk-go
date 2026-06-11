@@ -15,6 +15,7 @@ import (
 
 const (
 	PathGeneration       = "/v1/generation"
+	PathPrecharge        = "/v1/generation/precharge"
 	PathTask             = "/v1/generation/task/"
 	PathModelSkillSearch = "/v1/models/skill/search"
 	PathModelSkill       = "/v1/models/skill/"
@@ -41,6 +42,22 @@ func CreateTask(client *transport.Client, ctx context.Context, body any, headers
 	}
 	if resp.ID == "" {
 		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "API returned no task ID"}
+	}
+	return &resp, nil
+}
+
+func Precharge(client *transport.Client, ctx context.Context, body any, headers http.Header) (*mmtypes.PrechargeResponse, error) {
+	status, payload, err := client.Request(ctx, http.MethodPost, PathPrecharge, body, headers)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, httpError(status, payload)
+	}
+
+	var resp mmtypes.PrechargeResponse
+	if err := decode(payload, &resp); err != nil {
+		return nil, err
 	}
 	return &resp, nil
 }

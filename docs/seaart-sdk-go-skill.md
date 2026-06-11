@@ -17,7 +17,7 @@ tags:
 **处理逻辑：**
 
 1. 根据用户需求判断使用 Modal API（统一多模态任务）、Passthrough API（厂商原始接口）还是 LLM API（文本生成）
-2. 优先推荐 Builder 方式（`sa.NewTask(...).User(...).Param(...).Build()`）创建 Modal 任务
+2. 优先推荐 `input[*].params` 结构；如需类型化构造，可使用 `sa.NewTask(...).Params(...).Build()` 创建 Modal 任务
 3. LLM 接口返回 `RawResponse`，提醒用户用 `sa.Decode[T](raw)` 反序列化
 4. 流式接口推荐配合 `MessagesStreamTextAssembler` / `ResponsesStreamTextAssembler` 使用
 5. 错误处理建议断言为 `*sa.Error` 并按 `Kind` 分类处理（ErrAuth/ErrQuota/ErrTimeout/ErrTaskFailed）
@@ -63,13 +63,20 @@ client, err := sa.New(&sa.ClientConfig{
 ### 创建任务（Builder 方式，推荐）
 
 ```go
-body := sa.NewTask("vidu_q3_reference").
-    User(
-        sa.Text("cinematic shot"),
-        sa.ImageURL("https://example.com/ref1.webp"),
-        sa.ImageURL("https://example.com/ref2.webp"),
-    ).
-    Param("duration", 5).
+body := sa.NewTask("alibaba_wanx26_i2v_flash").
+    Moderation(true).
+    Params(map[string]any{
+        "input": map[string]any{
+            "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+            "prompt":  "小狗和女孩在秋天的公园里快乐地玩耍",
+        },
+        "parameters": map[string]any{
+            "resolution":    "720P",
+            "duration":      5,
+            "prompt_extend": true,
+            "watermark":     false,
+        },
+    }).
     Metadata("trace_id", "trace-123").
     Build()
 
@@ -80,30 +87,92 @@ task, err := client.Modal.Create(ctx, body)
 
 ```go
 task, err := client.Modal.Create(ctx, sa.JSONMap{
-    "model": "vidu_q3_reference",
+    "moderation": true,
+    "model": "alibaba_wanx26_i2v_flash",
     "input": []map[string]any{
         {
-            "type": "message",
-            "role": "user",
-            "content": []map[string]any{
-                {"type": "text", "text": "cinematic shot"},
-                {"type": "image_url", "url": "https://example.com/ref.webp"},
+            "params": map[string]any{
+                "input": map[string]any{
+                    "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                    "prompt":  "小狗和女孩在秋天的公园里快乐地玩耍",
+                },
+                "parameters": map[string]any{
+                    "resolution":    "720P",
+                    "duration":      5,
+                    "prompt_extend": true,
+                    "watermark":     false,
+                },
             },
         },
     },
-    "parameters": map[string]any{"duration": 5},
 })
 ```
 
-### 内容类型构造器
+### 预扣费查询
 
-| 函数 | 说明 |
-|------|------|
-| `sa.Text(text)` | 文本内容 |
-| `sa.ImageURL(url)` | 图片 URL |
-| `sa.VideoURL(url)` | 视频 URL |
-| `sa.AudioURL(url)` | 音频 URL |
-| `sa.FileID(id)` | 文件 ID |
+预扣费查询路由为 `/model/v1/generation/precharge`，请求参数与创建任务相同。
+
+```go
+resp, err := client.Modal.Precharge(ctx, sa.JSONMap{
+    "id":         "d88pmute87128c73e9r0d0",
+    "model":      "volces_seedream_4_5",
+    "input":      []map[string]any{{"params": map[string]any{"prompt": "A dog"}}},
+    "moderation": false,
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.Status)
+fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
+```
+
+Typed helper：
+
+```go
+body := sa.NewTask("volces_seedream_4_5").
+    Moderation(false).
+    Field("id", "d88pmute87128c73e9r0d0").
+    Params(map[string]any{
+        "prompt": "A dog",
+    }).
+    Build()
+
+resp, err := client.Modal.Precharge(ctx, body)
+```
+
+成功响应示例：
+
+```json
+{
+  "data": {
+    "billing_model": "volces_seedream_4_5",
+    "cost": "0.035714285714",
+    "currency": "USD",
+    "discount": 0.7,
+    "hash": "v1:18a733f04d227d572950ed8f1f98a9ba4cd37c168c5c98c05a5e574984f58eaf",
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "sample_count": 4,
+    "updated_at": 1780633394064
+  },
+  "status": "success"
+}
+```
+
+未匹配上预扣费数据时，可能返回：
+
+```json
+{
+  "data": {
+    "cost": null,
+    "hash": "v1:02833b68895eeb61bf214d35fd669502ef788e4c8d58505893414ae9632ca8ab",
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "reason": "COST_CACHE_MISS"
+  },
+  "status": "failed"
+}
+```
 
 ### 等待任务完成
 
@@ -380,12 +449,20 @@ func main() {
     ctx := context.Background()
 
     task, err := client.Modal.Create(ctx,
-        sa.NewTask("vidu_q3_reference").
-            User(
-                sa.Text("一只猫在月光下奔跑，电影级画面"),
-                sa.ImageURL("https://example.com/cat.jpg"),
-            ).
-            Param("duration", 5).
+        sa.NewTask("alibaba_wanx26_i2v_flash").
+            Moderation(true).
+            Params(map[string]any{
+                "input": map[string]any{
+                    "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+                    "prompt":  "小狗和女孩在秋天的公园里快乐地玩耍",
+                },
+                "parameters": map[string]any{
+                    "resolution":    "720P",
+                    "duration":      5,
+                    "prompt_extend": true,
+                    "watermark":     false,
+                },
+            }).
             Build(),
     )
     if err != nil {
