@@ -28,37 +28,21 @@ if err != nil {
 }
 ```
 
-默认网关配置：
-
-- `baseURL`：`https://gateway.example.com`
-- `modelBaseURL`：`https://gateway.example.com/model`
-- `llmBaseURL`：`https://gateway.example.com/llm`
-- `passthroughBaseURL`：`https://gateway.example.com/model`
-
-如果显式传入 `BaseURL`，SDK 会默认派生：
-
-- `modelBaseURL = baseURL + "/model"`
-- `llmBaseURL = baseURL + "/llm"`
-- `passthroughBaseURL = modelBaseURL`
-
-也可以分别覆盖：
+默认网关地址为 `https://gateway.example.com`。如果你的环境使用自定义网关，通常只需要覆盖 `BaseURL`，SDK 会基于同一个网关地址调用不同功能。
 
 ```go
 client, err := sa.New(&sa.ClientConfig{
-    APIKey:             "sa-your-api-key",
-    BaseURL:            "https://gateway.example.com",
-    ModelBaseURL:       "https://mm-gateway.example.com",
-    LLMBaseURL:         "https://llm-gateway.example.com",
-    PassthroughBaseURL: "https://mm-gateway.example.com",
-    Timeout:            60 * time.Second,
-    Project:            "my-project",
+    APIKey:  "sa-your-api-key",
+    BaseURL: "https://gateway.example.com",
+    Timeout: 60 * time.Second,
+    Project: "my-project",
 })
 if err != nil {
     log.Fatal(err)
 }
 ```
 
-## 多模态任务 API
+## 多模态 API
 
 第一阶段的多模态公开面只保留任务主链路：
 
@@ -70,10 +54,12 @@ if err != nil {
 - `client.Modal.SearchModels(...)`
 - `client.Modal.GetModelSkill(...)`
 - `client.Modal.ScanImage(...)`
+- `client.Modal.ScanText(...)`
 - `client.Modal.ScanFace(...)`
+- `client.Modal.ScanAudio(...)`
 - `task.Wait(...)`
 
-### 原始透传请求
+**创建任务**
 
 ```go
 task, err := client.Modal.Create(ctx, sa.JSONMap{
@@ -120,7 +106,7 @@ fmt.Println(resp.Status)
 fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
 ```
 
-类型化辅助构造：
+**类型化辅助构造**
 
 ```go
 body := sa.NewTask("volces_seedream_4_5").
@@ -134,7 +120,7 @@ body := sa.NewTask("volces_seedream_4_5").
 resp, err := client.Modal.Precharge(ctx, body)
 ```
 
-成功响应示例：
+**成功响应示例**
 
 ```json
 {
@@ -153,7 +139,7 @@ resp, err := client.Modal.Precharge(ctx, body)
 }
 ```
 
-未匹配上预扣费数据时，可能返回：
+**未匹配上预扣费数据时，可能返回**
 
 ```json
 {
@@ -181,7 +167,7 @@ if err != nil {
 fmt.Println(task.Status, task.Progress)
 ```
 
-也可以在创建任务后继续等待：
+**也可以在创建任务后继续等待**
 
 ```go
 task, err := client.Modal.Create(ctx, sa.JSONMap{
@@ -200,7 +186,7 @@ if err != nil {
 
 ### 类型化辅助构造
 
-SDK 也提供轻量的通用辅助构造器，用于构造统一输入结构：
+**SDK 也提供轻量的通用辅助构造器，用于构造统一输入结构**
 
 ```go
 body := sa.NewTask("alibaba_wanx26_i2v_flash").
@@ -243,7 +229,7 @@ body := sa.NewTask("grok_imagine_image").
 task, err := client.Modal.Create(ctx, body)
 ```
 
-设计原则：
+**设计原则**
 
 - 多模态核心层只做请求透传和任务生命周期管理
 - 不在核心层维护厂商参数枚举
@@ -251,7 +237,7 @@ task, err := client.Modal.Create(ctx, body)
 
 ### 模型列表和参数详情
 
-列表接口复用 `ModelBaseURL`，对应 `GET /v1/models/skill/search`：
+列表接口对应 `GET /v1/models/skill/search`：
 
 ```go
 models, err := client.Modal.ListModels(ctx, sa.ModalModelSearchParams{
@@ -266,7 +252,7 @@ for _, hit := range models.Hits {
 }
 ```
 
-可选筛选参数映射：
+**可选筛选参数映射**
 
 - `Query` 映射到查询参数 `q`
 - `Input` 映射到查询参数 `input`
@@ -275,7 +261,7 @@ for _, hit := range models.Hits {
 - `Provider` 映射到查询参数 `provider`
 - `Limit` 映射到查询参数 `limit`
 
-参数详情接口对应 `GET /v1/models/skill/{model}`，返回 Markdown 文本：
+**参数详情接口对应 `GET /v1/models/skill/{model}`，返回 Markdown 文本**
 
 ```go
 skill, err := client.Modal.GetModelSkill(ctx, "alibaba_animate_anyone_detect")
@@ -285,9 +271,44 @@ if err != nil {
 fmt.Println(skill)
 ```
 
-### 图片/视频鉴黄
+### Passthrough API（厂商透传）
 
-鉴黄接口复用 `ModelBaseURL`，对应 `POST /v1/image/scan`。请求会通过网关转发到推理网关。
+厂商透传层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+
+```go
+resp, err := client.Passthrough.Post(ctx, "/kling/v1/videos/text2video", sa.JSONMap{
+    "model_name": "kling-v1",
+    "prompt":     "cinematic shot",
+}, sa.WithHeader("X-Trace-Id", "trace-123"))
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.StatusCode, string(resp.Body))
+```
+
+**如果要完全透传原始 JSON 字节，使用 `RequestRaw`**
+
+```go
+resp, err := client.Passthrough.RequestRaw(
+    ctx,
+    http.MethodPost,
+    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
+    []byte(`{"contents":[{"parts":[{"text":"paint a cat"}]}]}`),
+)
+```
+
+**当前提供**
+
+- `Request`
+- `RequestRaw`
+- `Get`
+- `Post`
+- `Put`
+- `Delete`
+
+## 图片/视频鉴黄
+
+鉴黄接口对应 `POST /v1/image/scan`。请求会通过网关转发到推理网关。
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -329,9 +350,9 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
 
-### 敏感词检测
+## 敏感词检测
 
-敏感词检测接口复用 `ModelBaseURL`，对应 `POST /v1/text/scan`。
+敏感词检测接口对应 `POST /v1/text/scan`。
 
 ```go
 resp, err := client.Modal.ScanText(ctx, sa.TextScanRequest{
@@ -352,9 +373,9 @@ fmt.Println(resp.Data.Combination)
 
 `AreaTypes` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`Way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `StartIndex` / `EndIndex` 基于 rune 数组；`IsSensitive` 表示整体是否命中敏感内容，`Combination` 保留组合规则命中详情，网关注入的计费信息在 `resp.Usage`。
 
-### 人脸检测
+## 人脸检测
 
-人脸检测接口复用 `ModelBaseURL`，对应 `POST /v1/face/scan`，由网关转发到推理网关，再转发到上游 `/cloud/face/scan`。
+人脸检测接口对应 `POST /v1/face/scan`，由网关转发到推理网关，再转发到上游 `/cloud/face/scan`。
 
 ```go
 resp, err := client.Modal.ScanFace(ctx, sa.FaceScanRequest{
@@ -370,9 +391,9 @@ fmt.Println(resp.OK, resp.Usage)
 
 也可以传 `ImgBase64`。视频检测时设置 `IsVideo: 1`，并可传 `Duration` 用于计费。上游人脸检测返回结构会保留在 `resp.Extra`，网关注入的计费信息在 `resp.Usage`。
 
-### 音频检测
+## 音频检测
 
-音频检测接口复用 `ModelBaseURL`，对应 `POST /v1/audio/scan`。
+音频检测接口对应 `POST /v1/audio/scan`。
 
 ```go
 resp, err := client.Modal.ScanAudio(ctx, sa.AudioScanRequest{
@@ -390,41 +411,6 @@ for _, label := range resp.AllLabels {
 ```
 
 `RecType` 为检测类型，`Duration` 为音频时长秒数并用于计费。上游未建模字段会保留在 `resp.Extra`。
-
-## 厂商透传 API
-
-厂商透传层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
-
-```go
-resp, err := client.Passthrough.Post(ctx, "/kling/v1/videos/text2video", sa.JSONMap{
-    "model_name": "kling-v1",
-    "prompt":     "cinematic shot",
-}, sa.WithHeader("X-Trace-Id", "trace-123"))
-if err != nil {
-    log.Fatal(err)
-}
-fmt.Println(resp.StatusCode, string(resp.Body))
-```
-
-如果要完全透传原始 JSON 字节，使用 `RequestRaw`：
-
-```go
-resp, err := client.Passthrough.RequestRaw(
-    ctx,
-    http.MethodPost,
-    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
-    []byte(`{"contents":[{"parts":[{"text":"paint a cat"}]}]}`),
-)
-```
-
-当前提供：
-
-- `Request`
-- `RequestRaw`
-- `Get`
-- `Post`
-- `Put`
-- `Delete`
 
 ## 大语言模型 API
 
@@ -449,7 +435,7 @@ if err != nil {
 fmt.Println(resp.Choices[0].Message.Content)
 ```
 
-当前支持：
+**当前支持**
 
 - `ChatCompletions`
 - `ChatCompletionsStream`
