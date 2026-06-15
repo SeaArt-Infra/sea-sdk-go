@@ -334,10 +334,27 @@ if err != nil {
 }
 
 fmt.Println(resp.OK, resp.Usage)
-fmt.Println(resp.Extra["face_count"])
+fmt.Println(resp.Extra)
 ```
 
 也可以传 `ImgBase64`。视频检测设置 `IsVideo: 1`，可传 `Duration`。上游返回中的未建模字段会保留在 `Extra`。
+
+**人脸检测响应示例（SDK 返回结构）**
+
+```json
+{
+  "ok": true,
+  "error": "",
+  "usage": {
+    "cost": "1"
+  },
+  "extra": {
+    "nsfw_level": 0,
+    "label_items": [],
+    "risk_types": []
+  }
+}
+```
 
 ## 音频检测
 
