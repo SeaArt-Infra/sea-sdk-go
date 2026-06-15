@@ -261,6 +261,60 @@ type TextScanResponse struct {
 	Extra map[string]any `json:"-"`
 }
 
+// AudioScanRequest is the request body for POST /v1/audio/scan.
+type AudioScanRequest struct {
+	// URI is the audio URL to scan.
+	URI string `json:"uri"`
+	// RecType selects the upstream audio moderation type.
+	RecType string `json:"rec_type,omitempty"`
+	// Duration is the audio duration in seconds and is used for billing when known.
+	Duration float64 `json:"duration,omitempty"`
+}
+
+// AudioScanResponse is the parsed response returned by POST /v1/audio/scan.
+//
+// Extra keeps any upstream response fields that are not modeled by the SDK yet.
+type AudioScanResponse struct {
+	// RiskDescription contains the upstream risk description.
+	RiskDescription string `json:"riskDescription,omitempty"`
+	// RiskLevel contains the upstream risk level, for example PASS or REJECT.
+	RiskLevel string `json:"riskLevel,omitempty"`
+	// AllLabels contains all labels returned by the upstream audio scanner.
+	AllLabels []AudioScanLabel `json:"allLabels,omitempty"`
+	// Usage contains gateway billing metadata injected by inference-gateway.
+	Usage *Usage `json:"usage,omitempty"`
+	// Extra contains upstream response fields that are not modeled by the SDK yet.
+	Extra map[string]any `json:"-"`
+}
+
+// AudioScanLabel describes one audio moderation label.
+type AudioScanLabel struct {
+	Label1      string `json:"label1,omitempty"`
+	Label2      string `json:"label2,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+func (r *AudioScanResponse) UnmarshalJSON(data []byte) error {
+	type alias AudioScanResponse
+	var typed alias
+	if err := json.Unmarshal(data, &typed); err != nil {
+		return err
+	}
+
+	var extra map[string]any
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	delete(extra, "riskDescription")
+	delete(extra, "riskLevel")
+	delete(extra, "allLabels")
+	delete(extra, "usage")
+
+	*r = AudioScanResponse(typed)
+	r.Extra = extra
+	return nil
+}
+
 // TextScanData contains text moderation results.
 type TextScanData struct {
 	// SensitiveWords contains every sensitive word matched by the service.

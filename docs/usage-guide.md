@@ -33,28 +33,26 @@ if err != nil {
 
 ```go
 client, err := sa.New(&sa.ClientConfig{
-    APIKey:             "sa-your-api-key",       // 必填：SeaArt API Key
-    BaseURL:            "https://custom-url.com", // 可选：自定义基础地址
-    ModelBaseURL:       "https://model-url.com",  // 可选：多模态端点
-    LLMBaseURL:         "https://llm-url.com",    // 可选：LLM 端点
-    PassthroughBaseURL: "https://model-url.com",  // 可选：厂商透传端点，默认同 ModelBaseURL
-    Project:            "my-project",            // 可选：作为 X-Project 头发送
-    HTTPClient:         &http.Client{},           // 可选：自定义 HTTP 客户端
-    Timeout:            60 * time.Second,         // 可选：默认 5 分钟
+    APIKey:     "sa-your-api-key",          // 必填：SeaArt API Key
+    BaseURL:    "https://gateway.example.com", // 可选：自定义网关地址
+    Project:    "my-project",               // 可选：作为 X-Project 头发送
+    HTTPClient: &http.Client{},              // 可选：自定义 HTTP 客户端
+    Timeout:    60 * time.Second,            // 可选：默认 5 分钟
 })
 ```
 
-**默认端点：**
-- Base: `https://gateway.example.com`
-- 认证方式: `Authorization: Bearer {apiKey}`
+**默认网关地址：** `https://gateway.example.com`
+**认证方式：** `Authorization: Bearer {apiKey}`
+
+通常只需要配置 `BaseURL`；SDK 会基于同一个网关地址调用多模态、LLM 和厂商透传能力。
 
 ---
 
-## Modal API（多模态任务）
+## 多模态 API
 
 用于图像生成、视频生成等多模态 AI 任务。
 
-### 创建任务（原始方式）
+**创建任务**
 
 ```go
 ctx := context.Background()
@@ -122,7 +120,7 @@ fmt.Println(resp.Status)
 fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
 ```
 
-Typed helper：
+**Typed helper**
 
 ```go
 body := sa.NewTask("volces_seedream_4_5").
@@ -136,7 +134,7 @@ body := sa.NewTask("volces_seedream_4_5").
 resp, err := client.Modal.Precharge(ctx, body)
 ```
 
-成功响应示例：
+**成功响应示例**
 
 ```json
 {
@@ -155,7 +153,7 @@ resp, err := client.Modal.Precharge(ctx, body)
 }
 ```
 
-未匹配上预扣费数据时，可能返回：
+**未匹配上预扣费数据时，可能返回**
 
 ```json
 {
@@ -206,9 +204,54 @@ if task.Status == "completed" {
 }
 ```
 
-### 图片/视频鉴黄
+### Passthrough API（厂商透传）
 
-鉴黄接口走 `ModelBaseURL`，对应 `POST /v1/image/scan`，用于图片、GIF 或视频风险检测。
+用于调用厂商原始 API 形态的接口，路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+
+#### JSON 请求
+
+```go
+resp, err := client.Passthrough.Post(ctx, "/kling/v1/videos/text2video", sa.JSONMap{
+    "model_name": "kling-v1",
+    "prompt":     "cinematic shot",
+}, sa.WithHeader("X-Trace-Id", "trace-123"))
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(resp.StatusCode)
+fmt.Println(string(resp.Body))
+```
+
+#### 原始请求体透传
+
+```go
+resp, err := client.Passthrough.RequestRaw(
+    ctx,
+    http.MethodPost,
+    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
+    []byte(`{"contents":[{"parts":[{"text":"paint a cat"}]}]}`),
+)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+`PassthroughResponse` 会保留响应状态码、响应头和原始 body：
+
+```go
+type PassthroughResponse struct {
+    StatusCode int
+    Headers    http.Header
+    Body       sa.RawResponse
+}
+```
+
+---
+
+## 图片/视频鉴黄
+
+鉴黄接口对应 `POST /v1/image/scan`，用于图片、GIF 或视频风险检测。
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -252,9 +295,9 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
 | `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
 | `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
 
-### 敏感词检测
+## 敏感词检测
 
-敏感词检测接口走 `ModelBaseURL`，对应 `POST /v1/text/scan`。
+敏感词检测接口对应 `POST /v1/text/scan`。
 
 ```go
 resp, err := client.Modal.ScanText(ctx, sa.TextScanRequest{
@@ -276,9 +319,9 @@ fmt.Println(resp.Data.Combination)
 
 `AreaTypes` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`Way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `StartIndex` / `EndIndex` 基于 rune 数组；`IsSensitive` 表示整体是否命中敏感内容，`Combination` 保留组合规则命中详情，未建模字段会保留在 `Extra`。
 
-### 人脸检测
+## 人脸检测
 
-人脸检测接口走 `ModelBaseURL`，对应 `POST /v1/face/scan`，用于图片或视频人脸检测。网关会转发到上游 `/cloud/face/scan`。
+人脸检测接口对应 `POST /v1/face/scan`，用于图片或视频人脸检测。网关会转发到上游 `/cloud/face/scan`。
 
 ```go
 resp, err := client.Modal.ScanFace(ctx, sa.FaceScanRequest{
@@ -296,6 +339,28 @@ fmt.Println(resp.Extra["face_count"])
 
 也可以传 `ImgBase64`。视频检测设置 `IsVideo: 1`，可传 `Duration`。上游返回中的未建模字段会保留在 `Extra`。
 
+## 音频检测
+
+音频检测接口对应 `POST /v1/audio/scan`，用于音频风险检测。网关会转发到下游音频检测服务并注入 `Usage` 计费信息。
+
+```go
+resp, err := client.Modal.ScanAudio(ctx, sa.AudioScanRequest{
+    URI:      "https://example.com/audio/test.mp3",
+    RecType:  "AUDIOPOLITICAL_MOAN_ANTHEN",
+    Duration: 15,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(resp.RiskLevel, resp.RiskDescription, resp.Usage)
+for _, label := range resp.AllLabels {
+    fmt.Println(label.Label1, label.Label2, label.Description)
+}
+```
+
+`RecType` 为检测类型，`Duration` 为音频时长秒数并用于计费。上游返回中的未建模字段会保留在 `Extra`。
+
 **Task 结构体：**
 
 ```go
@@ -307,51 +372,6 @@ type Task struct {
     Output   []Output  // 生成结果
     Usage    *Usage    // 计费信息
     Error    *APIError // 错误详情（失败时）
-}
-```
-
----
-
-## Passthrough API（厂商透传）
-
-用于调用厂商原始 API 形态的接口，路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
-
-### JSON 请求
-
-```go
-resp, err := client.Passthrough.Post(ctx, "/kling/v1/videos/text2video", sa.JSONMap{
-    "model_name": "kling-v1",
-    "prompt":     "cinematic shot",
-}, sa.WithHeader("X-Trace-Id", "trace-123"))
-if err != nil {
-    log.Fatal(err)
-}
-
-fmt.Println(resp.StatusCode)
-fmt.Println(string(resp.Body))
-```
-
-### 原始请求体透传
-
-```go
-resp, err := client.Passthrough.RequestRaw(
-    ctx,
-    http.MethodPost,
-    "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
-    []byte(`{"contents":[{"parts":[{"text":"paint a cat"}]}]}`),
-)
-if err != nil {
-    log.Fatal(err)
-}
-```
-
-`PassthroughResponse` 会保留响应状态码、响应头和原始 body：
-
-```go
-type PassthroughResponse struct {
-    StatusCode int
-    Headers    http.Header
-    Body       sa.RawResponse
 }
 ```
 
@@ -476,7 +496,7 @@ for _, model := range resp.Data {
 
 ## 请求选项
 
-可对任意请求附加自定义 HTTP 头：
+**可对任意请求附加自定义 HTTP 头**
 
 ```go
 client.LLM.ChatCompletions(ctx, payload,
