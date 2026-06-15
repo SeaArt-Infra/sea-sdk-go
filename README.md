@@ -1,21 +1,34 @@
-# sa-go
+# Sea Go SDK
 
-SeaArt AI 平台的 Go SDK，当前公开三类能力：
+Sea AI 平台 Go SDK，用于通过统一网关调用多模态、LLM 和厂商透传能力。
 
-- `client.Modal`：多模态任务接口
-- `client.LLM`：大语言模型透传接口
-- `client.Passthrough`：厂商原始 API 透传接口
+特点：
+
+- 纯标准库实现，无第三方运行时依赖
+- 保留原始请求透传能力
+- 支持 SSE 流式响应解析
+- 支持任务轮询和通用 task builder
+
+## 功能导航
+
+| 服务 | Client 字段 | 功能 |
+|------|-------------|------|
+| [多模态 API](#多模态-api) | `client.Modal` | 模型列表、参数详情、生成任务、预扣费查询和厂商透传 |
+| [图片/视频鉴黄](#图片视频鉴黄) | `client.Modal.ScanImage(...)` | 检测图片、GIF 或视频内容安全风险 |
+| [敏感词检测](#敏感词检测) | `client.Modal.ScanText(...)` | 检测文本敏感词和组合词风险 |
+| [人脸检测](#人脸检测) | `client.Modal.ScanFace(...)` | 检测图片或视频中的人脸相关结果 |
+| [音频检测](#音频检测) | `client.Modal.ScanAudio(...)` | 检测音频内容风险 |
+| [大语言模型 API](#大语言模型-api) | `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank 等兼容接口 |
 
 ## 安装
 
 ```bash
-go get github.com/SeaArt-Infra/sea-sdk-go
+go get github.com/SeaArt-Infra/sea-sdk-go.git
 ```
 
 要求：
 
 - Go 1.22+
-- 无第三方运行时依赖
 
 ## 初始化
 
@@ -28,7 +41,7 @@ if err != nil {
 }
 ```
 
-默认网关地址为 `https://gateway.example.com`。如果你的环境使用自定义网关，通常只需要覆盖 `BaseURL`，SDK 会基于同一个网关地址调用不同功能。
+通过 `BaseURL` 配置统一网关地址，SDK 会基于该地址调用多模态、LLM 和透传等能力。
 
 ```go
 client, err := sa.New(&sa.ClientConfig{
@@ -44,27 +57,46 @@ if err != nil {
 
 ## 多模态 API
 
-第一阶段的多模态公开面只保留任务主链路：
+### 模型列表和参数详情
 
-- `client.Modal.Create(...)`
-- `client.Modal.Precharge(...)`
-- `client.Modal.Get(...)`
-- `client.Modal.Wait(...)`
-- `client.Modal.ListModels(...)`
-- `client.Modal.SearchModels(...)`
-- `client.Modal.GetModelSkill(...)`
-- `client.Modal.ScanImage(...)`
-- `client.Modal.ScanText(...)`
-- `client.Modal.ScanFace(...)`
-- `client.Modal.ScanAudio(...)`
-- `task.Wait(...)`
+```go
+models, err := client.Modal.ListModels(ctx, sa.ModalModelSearchParams{
+    Query: "",
+    Limit: 2,
+})
+if err != nil {
+    log.Fatal(err)
+}
+for _, hit := range models.Hits {
+    fmt.Println(hit["name"])
+}
 
-**创建任务**
+skill, err := client.Modal.GetModelSkill(ctx, "alibaba_animate_anyone_detect")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(skill)
+```
+
+`ListModels` / `SearchModels` 支持的查询参数：
+
+- `Query` -> `q`
+- `Input` -> `input`
+- `Output` -> `output`
+- `Type` -> `type`
+- `Provider` -> `provider`
+- `Limit` -> `limit`
+
+### 生成任务
+
+创建任务有两种常用方式：直接传入原始请求 `JSONMap`，或使用 `NewTask` typed helper 构造请求体。两种方式最终都会调用 `client.Modal.Create(...)`。
+
+**方式一：直接传入原始请求 JSONMap**
 
 ```go
 task, err := client.Modal.Create(ctx, sa.JSONMap{
     "moderation": true,
-    "model": "alibaba_wanx26_i2v_flash",
+    "model":      "alibaba_wanx26_i2v_flash",
     "input": []map[string]any{
         {
             "params": map[string]any{
@@ -88,105 +120,9 @@ if err != nil {
 fmt.Println(task.ID, task.Status)
 ```
 
-### 预扣费查询
+`moderation` 为布尔类型，非必传；`true` 表示开白，`false` 表示非开白。`params` 为模型参数，具体结构由模型定义决定。
 
-预扣费查询路由为 `/model/v1/generation/precharge`，请求参数与创建任务相同。
-
-```go
-resp, err := client.Modal.Precharge(ctx, sa.JSONMap{
-    "id":         "d88pmute87128c73e9r0d0",
-    "model":      "volces_seedream_4_5",
-    "input":      []map[string]any{{"params": map[string]any{"prompt": "A dog"}}},
-    "moderation": false,
-})
-if err != nil {
-    log.Fatal(err)
-}
-fmt.Println(resp.Status)
-fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
-```
-
-**类型化辅助构造**
-
-```go
-body := sa.NewTask("volces_seedream_4_5").
-    Moderation(false).
-    Field("id", "d88pmute87128c73e9r0d0").
-    Params(map[string]any{
-        "prompt": "A dog",
-    }).
-    Build()
-
-resp, err := client.Modal.Precharge(ctx, body)
-```
-
-**成功响应示例**
-
-```json
-{
-  "data": {
-    "billing_model": "volces_seedream_4_5",
-    "cost": "0.035714285714",
-    "currency": "USD",
-    "discount": 0.7,
-    "hash": "v1:18a733f04d227d572950ed8f1f98a9ba4cd37c168c5c98c05a5e574984f58eaf",
-    "model": "volces_seedream_4_5",
-    "original_model": "volces_seedream_4_5",
-    "sample_count": 4,
-    "updated_at": 1780633394064
-  },
-  "status": "success"
-}
-```
-
-**未匹配上预扣费数据时，可能返回**
-
-```json
-{
-  "data": {
-    "cost": null,
-    "hash": "v1:02833b68895eeb61bf214d35fd669502ef788e4c8d58505893414ae9632ca8ab",
-    "model": "volces_seedream_4_5",
-    "original_model": "volces_seedream_4_5",
-    "reason": "COST_CACHE_MISS"
-  },
-  "status": "failed"
-}
-```
-
-### 等待任务完成
-
-```go
-task, err := client.Modal.Wait(ctx, "task_abc123",
-    sa.WithPollInterval(3*time.Second),
-    sa.WithPollTimeout(5*time.Minute),
-)
-if err != nil {
-    log.Fatal(err)
-}
-fmt.Println(task.Status, task.Progress)
-```
-
-**也可以在创建任务后继续等待**
-
-```go
-task, err := client.Modal.Create(ctx, sa.JSONMap{
-    "model": "alibaba_wanx26_i2v_flash",
-    "input": []map[string]any{{"params": map[string]any{"prompt": "A dog"}}},
-})
-if err != nil {
-    log.Fatal(err)
-}
-
-task, err = task.Wait(ctx, sa.WithPollInterval(3*time.Second))
-if err != nil {
-    log.Fatal(err)
-}
-```
-
-### 类型化辅助构造
-
-**SDK 也提供轻量的通用辅助构造器，用于构造统一输入结构**
+**方式二：使用 Typed helper 构造请求体**
 
 ```go
 body := sa.NewTask("alibaba_wanx26_i2v_flash").
@@ -212,68 +148,106 @@ if err != nil {
 }
 ```
 
-不同模型的 `params` 结构可能不同。有些模型直接把模型字段平铺在 `params` 下：
+**轮询结果**
 
 ```go
-body := sa.NewTask("grok_imagine_image").
-    Field("dash_scope", true).
-    Moderation(true).
-    Params(map[string]any{
-        "aspect_ratio": "1:2",
-        "prompt":       "Lego art version of Superman and Batman，Night scene",
-        "n":            1,
-        "resolution":   "1k",
-    }).
-    Build()
-
-task, err := client.Modal.Create(ctx, body)
+task, err := client.Modal.Wait(
+    ctx,
+    "task_abc123",
+    sa.WithPollInterval(3*time.Second),
+    sa.WithPollTimeout(5*time.Minute),
+)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(task.Status, task.Progress, task.URLs())
 ```
 
-**设计原则**
-
-- 多模态核心层只做请求透传和任务生命周期管理
-- 不在核心层维护厂商参数枚举
-- 不暴露厂商专用构造器
-
-### 模型列表和参数详情
-
-列表接口对应 `GET /v1/models/skill/search`：
+也可以在创建后继续等待：
 
 ```go
-models, err := client.Modal.ListModels(ctx, sa.ModalModelSearchParams{
-    Query: "",
-    Limit: 2,
+task, err := client.Modal.Create(ctx, sa.JSONMap{"model": "alibaba_wanx26_i2v_flash"})
+if err != nil {
+    log.Fatal(err)
+}
+
+task, err = task.Wait(ctx, sa.WithPollInterval(5*time.Second))
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### 预扣费查询
+
+预扣费查询请求参数与创建任务相同，可用于提前预估费用。支持两种常用方式：直接传入原始请求 `JSONMap`，或使用 `NewTask` typed helper 构造请求体。
+
+**方式一：直接传入原始请求 JSONMap**
+
+```go
+resp, err := client.Modal.Precharge(ctx, sa.JSONMap{
+    "id":    "d88pmute87128c73e9r0d0",
+    "model": "volces_seedream_4_5",
+    "input": []map[string]any{
+        {
+            "params": map[string]any{
+                "prompt": "A dog",
+            },
+        },
+    },
+    "moderation": false,
 })
 if err != nil {
     log.Fatal(err)
 }
-for _, hit := range models.Hits {
-    fmt.Println(hit["name"])
-}
+
+fmt.Println(resp.Status)
+fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
 ```
 
-**可选筛选参数映射**
-
-- `Query` 映射到查询参数 `q`
-- `Input` 映射到查询参数 `input`
-- `Output` 映射到查询参数 `output`
-- `Type` 映射到查询参数 `type`
-- `Provider` 映射到查询参数 `provider`
-- `Limit` 映射到查询参数 `limit`
-
-**参数详情接口对应 `GET /v1/models/skill/{model}`，返回 Markdown 文本**
+**方式二：使用 Typed helper 构造请求体**
 
 ```go
-skill, err := client.Modal.GetModelSkill(ctx, "alibaba_animate_anyone_detect")
+body := sa.NewTask("volces_seedream_4_5").
+    Moderation(false).
+    Field("id", "d88pmute87128c73e9r0d0").
+    Params(map[string]any{
+        "prompt": "A dog",
+    }).
+    Build()
+
+resp, err := client.Modal.Precharge(ctx, body)
 if err != nil {
     log.Fatal(err)
 }
-fmt.Println(skill)
+
+fmt.Println(resp.Status)
+fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
+```
+
+**响应示例**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "model": "volces_seedream_4_5",
+    "original_model": "volces_seedream_4_5",
+    "billing_model": "volces_seedream_4_5",
+    "sample_count": 1,
+    "cost": "0.2",
+    "currency": "credit",
+    "discount": 1,
+    "hash": "example-hash",
+    "updated_at": 1710000000
+  }
+}
 ```
 
 ### Passthrough API（厂商透传）
 
-厂商透传层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+
+**方式一：JSON object 请求**
 
 ```go
 resp, err := client.Passthrough.Post(ctx, "/kling/v1/videos/text2video", sa.JSONMap{
@@ -286,7 +260,7 @@ if err != nil {
 fmt.Println(resp.StatusCode, string(resp.Body))
 ```
 
-**如果要完全透传原始 JSON 字节，使用 `RequestRaw`**
+**方式二：原始字节透传**
 
 ```go
 resp, err := client.Passthrough.RequestRaw(
@@ -295,9 +269,13 @@ resp, err := client.Passthrough.RequestRaw(
     "/google/v1beta/models/gemini-2.5-flash-image:generateContent",
     []byte(`{"contents":[{"parts":[{"text":"paint a cat"}]}]}`),
 )
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.StatusCode, string(resp.Body))
 ```
 
-**当前提供**
+当前提供：
 
 - `Request`
 - `RequestRaw`
@@ -308,7 +286,7 @@ resp, err := client.Passthrough.RequestRaw(
 
 ## 图片/视频鉴黄
 
-鉴黄接口对应 `POST /v1/image/scan`。请求会通过网关转发到推理网关。
+图片/视频鉴黄接口对应 `POST /v1/image/scan`，用于对图片、GIF 或视频内容进行安全风险检测。调用时需要提供待检测媒体 URL，并通过 `RiskTypes` 指定需要检测的风险类型。
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -328,7 +306,7 @@ if err != nil {
 fmt.Println(resp.OK, resp.NSFWLevel, resp.RiskTypes)
 ```
 
-视频检测时设置 `IsVideo: 1`，并可传 `Duration` 用于计费：
+也支持视频检测：
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -339,43 +317,82 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
 })
 ```
 
-常用响应字段包括 `OK`、`NSFWLevel`、`LabelItems`、`RiskTypes`、`FrameResults` 和 `Usage`。
+**审核通过响应示例**
 
-风险类型说明：
+```json
+{
+  "label_items": [],
+  "risk_types": [],
+  "usage": {
+    "cost": "0.1"
+  },
+  "ok": true,
+  "nsfw_level": 0
+}
+```
 
-| 常量 | 接口值 | 说明 |
-|------|--------|------|
-| `sa.ImageScanRiskTypePolity` | `POLITY` | 政治敏感、公共安全等风险内容 |
-| `sa.ImageScanRiskTypeErotic` | `EROTIC` | 色情、裸露、性暗示等成人内容 |
-| `sa.ImageScanRiskTypeViolent` | `VIOLENT` | 暴力、血腥、武器、伤害等内容 |
-| `sa.ImageScanRiskTypeChild` | `CHILD` | 儿童安全风险，尤其是儿童相关不安全或性化内容 |
+**命中风险响应示例**
+
+```json
+{
+  "nsfw_level": 5,
+  "label_items": [
+    {
+      "name": "erotic_sexual_body",
+      "score": 98,
+      "risk_type": "EROTIC"
+    }
+  ],
+  "risk_types": ["EROTIC"],
+  "usage": {
+    "cost": "0.1"
+  },
+  "ok": false
+}
+```
 
 ## 敏感词检测
 
-敏感词检测接口对应 `POST /v1/text/scan`。
+敏感词检测接口对应 `POST /v1/text/scan`，用于检测输入文本中的敏感词、组合词和风险命中结果。
 
 ```go
 resp, err := client.Modal.ScanText(ctx, sa.TextScanRequest{
-    Text:      "prompt to check",
+    Text:      "a cute cat sitting on the sofa",
     Scene:     1,
-    AreaTypes: []sa.TextScanAreaType{sa.TextScanAreaTypeForeign},
-    Way:       sa.TextScanWayDictionary,
+    AreaTypes: []int{2},
+    Way:       0,
 })
 if err != nil {
     log.Fatal(err)
 }
-fmt.Println(resp.Usage)
-fmt.Println(resp.Status.Code, resp.Status.Msg)
 fmt.Println(resp.Data.IsSensitive)
 fmt.Println(resp.Data.SensitiveWords)
-fmt.Println(resp.Data.Combination)
+fmt.Println(resp.Extra)
 ```
 
-`AreaTypes` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`Way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `StartIndex` / `EndIndex` 基于 rune 数组；`IsSensitive` 表示整体是否命中敏感内容，`Combination` 保留组合规则命中详情，网关注入的计费信息在 `resp.Usage`。
+**审核通过响应示例**
+
+```json
+{
+  "usage": {
+    "cost": "1"
+  },
+  "data": {
+    "sensitive_words": [],
+    "combination": null,
+    "is_sensitive": false
+  },
+  "status": {
+    "msg": "success",
+    "request_id": "b5ebfb02a9d11adf98b05b397bd82e9e",
+    "code": 10000
+  }
+}
+```
 
 ## 人脸检测
 
-人脸检测接口对应 `POST /v1/face/scan`，由网关转发到推理网关，再转发到上游 `/cloud/face/scan`。
+人脸检测接口对应 `POST /v1/face/scan`，用于检测图片或视频中的人脸相关结果。调用时可以传入媒体 URL，也可以传入图片 base64 内容。
 
 ```go
 resp, err := client.Modal.ScanFace(ctx, sa.FaceScanRequest{
@@ -387,13 +404,55 @@ if err != nil {
     log.Fatal(err)
 }
 fmt.Println(resp.OK, resp.Usage)
+fmt.Println(resp.Extra)
 ```
 
-也可以传 `ImgBase64`。视频检测时设置 `IsVideo: 1`，并可传 `Duration` 用于计费。上游人脸检测返回结构会保留在 `resp.Extra`，网关注入的计费信息在 `resp.Usage`。
+**响应字段**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `OK` | `bool` | 检测请求是否成功完成 |
+| `Error` | `string` | 上游业务错误信息；成功时通常为空 |
+| `Usage` | `*Usage` | 网关注入的计费信息 |
+| `Extra` | `map[string]any` | 上游返回的未建模字段，例如风险等级、标签、人脸数量等 |
+
+**不含人脸图片响应示例（SDK 返回结构）**
+
+```json
+{
+  "ok": true,
+  "error": "",
+  "usage": {
+    "cost": "1"
+  },
+  "extra": {
+    "nsfw_level": 0,
+    "label_items": [],
+    "risk_types": []
+  }
+}
+```
+
+**含人脸图片响应示例（SDK 返回结构）**
+
+```json
+{
+  "ok": true,
+  "error": "",
+  "usage": {
+    "cost": "1"
+  },
+  "extra": {
+    "nsfw_level": 0,
+    "label_items": [],
+    "risk_types": []
+  }
+}
+```
 
 ## 音频检测
 
-音频检测接口对应 `POST /v1/audio/scan`。
+音频检测接口对应 `POST /v1/audio/scan`，用于检测音频内容风险。调用时需要提供可访问的音频 URL，`Duration` 用于计费和统计。
 
 ```go
 resp, err := client.Modal.ScanAudio(ctx, sa.AudioScanRequest{
@@ -404,59 +463,83 @@ resp, err := client.Modal.ScanAudio(ctx, sa.AudioScanRequest{
 if err != nil {
     log.Fatal(err)
 }
-fmt.Println(resp.RiskLevel, resp.RiskDescription, resp.Usage)
-for _, label := range resp.AllLabels {
-    fmt.Println(label.Label1, label.Label2, label.Description)
+fmt.Println(resp.RiskLevel, resp.AllLabels)
+fmt.Println(resp.Extra)
+```
+
+**审核通过响应示例**
+
+```json
+{
+  "code": 1100,
+  "message": "成功",
+  "requestId": "a63b89046c70435a4fb9a0d36439d0ee",
+  "btId": "https://example.com/audio/sample.mp3",
+  "detail": {
+    "audioDetail": [],
+    "audioTags": {},
+    "audioText": "示例音频转写文本",
+    "audioTime": 4,
+    "code": 1100,
+    "requestParams": {},
+    "riskLevel": "PASS"
+  }
 }
 ```
 
-`RecType` 为检测类型，`Duration` 为音频时长秒数并用于计费。上游未建模字段会保留在 `resp.Extra`。
-
 ## 大语言模型 API
 
-大语言模型层继续采用“请求透传 + 原始响应返回”的形式。
+LLM 方法均为同步调用，返回原始字节，使用 `sa.Decode[T](raw)` 反序列化。
 
 ```go
 raw, err := client.LLM.ChatCompletions(ctx, sa.JSONMap{
     "model": "gpt-4o-mini",
-    "messages": []map[string]any{
+    "messages": []map[string]string{
         {"role": "user", "content": "hello"},
     },
     "max_tokens": 64,
-}, sa.WithHeader("X-Trace-Id", "trace-123"))
+})
 if err != nil {
     log.Fatal(err)
 }
 
-resp, err := sa.Decode[sa.ChatCompletionResponse](raw)
+resp, err := sa.Decode[map[string]any](raw)
 if err != nil {
     log.Fatal(err)
 }
-fmt.Println(resp.Choices[0].Message.Content)
+fmt.Println(resp)
 ```
 
-**当前支持**
+当前支持的方法：
 
-- `ChatCompletions`
-- `ChatCompletionsStream`
-- `Messages`
-- `MessagesStream`
-- `Responses`
-- `ResponsesStream`
-- `Rerank`
-- `Embeddings`
-- `ListModels`
+| 方法 | 说明 |
+|------|------|
+| `ChatCompletions` | 调用 OpenAI Chat Completions 兼容接口，返回原始响应字节 |
+| `ChatCompletionsStream` | 调用 Chat Completions 流式接口，返回承载 SSE 流式事件的 channel |
+| `Messages` | 调用 Anthropic Messages 兼容接口，返回原始响应字节 |
+| `MessagesStream` | 调用 Messages 流式接口，返回承载 SSE 流式事件的 channel |
+| `Responses` | 调用 OpenAI Responses 兼容接口，返回原始响应字节 |
+| `ResponsesStream` | 调用 Responses 流式接口，返回承载 SSE 流式事件的 channel |
+| `Rerank` | 调用文本重排接口 |
+| `Embeddings` | 调用向量生成接口 |
+| `ListModels` | 查询 LLM 模型列表 |
 
-## 开发命令
+流式方法返回承载 SSE 流式事件的 channel：
 
-```bash
-make fmt
-make test
-make vet
-make check
-
-task fmt
-task test
-task vet
-task check
+```go
+events, err := client.LLM.ChatCompletionsStream(ctx, sa.JSONMap{
+    "model": "gpt-4o-mini",
+    "messages": []map[string]string{
+        {"role": "user", "content": "hello"},
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+for event := range events {
+    if event.Done {
+        break
+    }
+    fmt.Println(string(event.Data))
+}
 ```
