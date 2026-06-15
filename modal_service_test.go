@@ -614,6 +614,82 @@ func TestModalScanText_RequiresText(t *testing.T) {
 	}
 }
 
+func TestModalScanAudio_PostsAudioScanRequest(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/v1/audio/scan" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("unexpected authorization: %s", got)
+		}
+		if got := r.Header.Get("X-Trace-Id"); got != "trace-audio" {
+			t.Fatalf("unexpected trace header: %s", got)
+		}
+
+		body := extractBody(t, r)
+		if body["uri"] != "https://example.com/audio/test.mp3" {
+			t.Fatalf("unexpected uri: %v", body["uri"])
+		}
+		if body["rec_type"] != "AUDIOPOLITICAL_MOAN_ANTHEN" {
+			t.Fatalf("unexpected rec_type: %v", body["rec_type"])
+		}
+		if body["duration"] != float64(15) {
+			t.Fatalf("unexpected duration: %v", body["duration"])
+		}
+
+		writeJSON(w, 200, map[string]any{
+			"riskDescription": "涉政音频",
+			"riskLevel":       "REJECT",
+			"allLabels": []map[string]any{
+				{
+					"label1":      "politics",
+					"label2":      "leader",
+					"description": "涉政内容",
+				},
+			},
+			"usage": map[string]any{
+				"cost": "0.001",
+			},
+			"request_id": "audio-risk-1",
+		})
+	})
+
+	resp, err := client.Modal.ScanAudio(context.Background(), sa.AudioScanRequest{
+		URI:      "https://example.com/audio/test.mp3",
+		RecType:  "AUDIOPOLITICAL_MOAN_ANTHEN",
+		Duration: 15,
+	}, sa.WithHeader("X-Trace-Id", "trace-audio"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.RiskDescription != "涉政音频" || resp.RiskLevel != "REJECT" {
+		t.Fatalf("unexpected audio response: %+v", resp)
+	}
+	if len(resp.AllLabels) != 1 || resp.AllLabels[0].Label1 != "politics" {
+		t.Fatalf("unexpected labels: %+v", resp.AllLabels)
+	}
+	if resp.Usage == nil || resp.Usage.Cost.String() != "0.001" {
+		t.Fatalf("unexpected usage: %+v", resp.Usage)
+	}
+	if resp.Extra["request_id"] != "audio-risk-1" {
+		t.Fatalf("unexpected extra fields: %+v", resp.Extra)
+	}
+}
+
+func TestModalScanAudio_RequiresURI(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("request should not be sent: %s %s", r.Method, r.URL.Path)
+	})
+
+	_, err := client.Modal.ScanAudio(context.Background(), sa.AudioScanRequest{URI: " "})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 func TestModalScanFace_PostsFaceScanRequest(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

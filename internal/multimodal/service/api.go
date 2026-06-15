@@ -25,6 +25,8 @@ const (
 	PathFaceScan = "/v1/face/scan"
 	// PathTextScan is the sensitive-word scan endpoint used for text prompts.
 	PathTextScan = "/v1/text/scan"
+	// PathAudioScan is the audio moderation scan endpoint.
+	PathAudioScan = "/v1/audio/scan"
 )
 
 func CreateTask(client *transport.Client, ctx context.Context, body any, headers http.Header) (*mmtypes.GenerationResponse, error) {
@@ -148,6 +150,28 @@ func ScanText(client *transport.Client, ctx context.Context, req mmtypes.TextSca
 	}
 
 	var resp mmtypes.TextScanResponse
+	if err := decode(payload, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ScanAudio sends an audio moderation request to PathAudioScan.
+func ScanAudio(client *transport.Client, ctx context.Context, req mmtypes.AudioScanRequest, headers http.Header) (*mmtypes.AudioScanResponse, error) {
+	req.URI = strings.TrimSpace(req.URI)
+	if req.URI == "" {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "uri is required"}
+	}
+
+	status, payload, err := client.Request(ctx, http.MethodPost, PathAudioScan, req, headers)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, httpError(status, payload)
+	}
+
+	var resp mmtypes.AudioScanResponse
 	if err := decode(payload, &resp); err != nil {
 		return nil, err
 	}

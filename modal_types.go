@@ -62,6 +62,15 @@ type TextScanSensitiveWord = mmtypes.TextScanSensitiveWord
 // TextScanStatus contains the upstream business status.
 type TextScanStatus = mmtypes.TextScanStatus
 
+// AudioScanRequest is the request body for POST /v1/audio/scan.
+type AudioScanRequest = mmtypes.AudioScanRequest
+
+// AudioScanResponse is the parsed response returned by POST /v1/audio/scan.
+type AudioScanResponse = mmtypes.AudioScanResponse
+
+// AudioScanLabel describes one audio moderation label.
+type AudioScanLabel = mmtypes.AudioScanLabel
+
 // TextScanAreaType selects which regional sensitive-word rules are applied.
 type TextScanAreaType = mmtypes.TextScanAreaType
 

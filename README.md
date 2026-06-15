@@ -370,6 +370,27 @@ fmt.Println(resp.OK, resp.Usage)
 
 也可以传 `ImgBase64`。视频检测时设置 `IsVideo: 1`，并可传 `Duration` 用于计费。上游人脸检测返回结构会保留在 `resp.Extra`，网关注入的计费信息在 `resp.Usage`。
 
+### 音频检测
+
+音频检测接口复用 `ModelBaseURL`，对应 `POST /v1/audio/scan`。
+
+```go
+resp, err := client.Modal.ScanAudio(ctx, sa.AudioScanRequest{
+    URI:      "https://example.com/audio/test.mp3",
+    RecType:  "AUDIOPOLITICAL_MOAN_ANTHEN",
+    Duration: 15,
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.RiskLevel, resp.RiskDescription, resp.Usage)
+for _, label := range resp.AllLabels {
+    fmt.Println(label.Label1, label.Label2, label.Description)
+}
+```
+
+`RecType` 为检测类型，`Duration` 为音频时长秒数并用于计费。上游未建模字段会保留在 `resp.Extra`。
+
 ## 厂商透传 API
 
 厂商透传层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。

@@ -296,6 +296,28 @@ fmt.Println(resp.Extra["face_count"])
 
 也可以传 `ImgBase64`。视频检测设置 `IsVideo: 1`，可传 `Duration`。上游返回中的未建模字段会保留在 `Extra`。
 
+### 音频检测
+
+音频检测接口走 `ModelBaseURL`，对应 `POST /v1/audio/scan`，用于音频风险检测。网关会转发到下游音频检测服务并注入 `Usage` 计费信息。
+
+```go
+resp, err := client.Modal.ScanAudio(ctx, sa.AudioScanRequest{
+    URI:      "https://example.com/audio/test.mp3",
+    RecType:  "AUDIOPOLITICAL_MOAN_ANTHEN",
+    Duration: 15,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(resp.RiskLevel, resp.RiskDescription, resp.Usage)
+for _, label := range resp.AllLabels {
+    fmt.Println(label.Label1, label.Label2, label.Description)
+}
+```
+
+`RecType` 为检测类型，`Duration` 为音频时长秒数并用于计费。上游返回中的未建模字段会保留在 `Extra`。
+
 **Task 结构体：**
 
 ```go
