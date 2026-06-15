@@ -359,7 +359,7 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
 resp, err := client.Modal.ScanText(ctx, sa.TextScanRequest{
     Text:      "a cute cat sitting on the sofa",
     Scene:     1,
-    AreaTypes: []int{2},
+    AreaTypes: []sa.TextScanAreaType{sa.TextScanAreaTypeForeign},
     Way:       0,
 })
 if err != nil {
