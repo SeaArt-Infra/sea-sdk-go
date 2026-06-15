@@ -17,12 +17,6 @@ go get github.com/SeaArt-Infra/sea-sdk-go
 - Go 1.22+
 - 无第三方运行时依赖
 
-## 文档导航
-
-- [使用指南](docs/usage-guide.md)：按任务场景给出初始化、任务创建、等待、内容安全、透传和 LLM 示例。
-- [API 参考](docs/api-reference.md)：按 SDK 方法列出请求路径、入参、返回值、流式事件和错误处理约定。
-- [Codex 技能文档](docs/seaart-sdk-go-skill.md)：面向自动化助手的调用提示和常用片段。
-
 ## 初始化
 
 ```go
