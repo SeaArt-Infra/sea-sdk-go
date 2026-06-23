@@ -16,6 +16,7 @@ Sea AI 平台 Go SDK，用于通过统一网关调用多模态、LLM 和厂商�
 | [多模态 API](#多模态-api) | `client.Modal` | 模型列表、参数详情、生成任务、预扣费查询和厂商透传 |
 | [图片/视频鉴黄](#图片视频鉴黄) | `client.Modal.ScanImage(...)` | 检测图片、GIF 或视频内容安全风险 |
 | [敏感词检测](#敏感词检测) | `client.Modal.ScanText(...)` | 检测文本敏感词和组合词风险 |
+| [文本内容安全审核](#文本内容安全审核) | `client.Modal.ScanTextContent(...)` | 审核短文本内容安全风险等级和分类标签 |
 | [人脸检测](#人脸检测) | `client.Modal.ScanFace(...)` | 检测图片或视频中的人脸相关结果 |
 | [音频检测](#音频检测) | `client.Modal.ScanAudio(...)` | 检测音频内容风险 |
 | [大语言模型 API](#大语言模型-api) | `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank 等兼容接口 |
@@ -386,6 +387,72 @@ fmt.Println(resp.Extra)
     "msg": "success",
     "request_id": "b5ebfb02a9d11adf98b05b397bd82e9e",
     "code": 10000
+  }
+}
+```
+
+
+## 文本内容安全审核
+
+文本内容安全审核接口对应 `POST /v1/text/content/scan`，用于对短文本进行内容安全审核，返回风险等级、分类标签和判定理由。该接口不影响旧敏感词检测接口 `POST /v1/text/scan`。
+
+```go
+resp, err := client.Modal.ScanTextContent(ctx, sa.TextContentScanRequest{
+    Text:   "hello world",
+    Canary: "A",
+    Scene:  "user_name",
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.OK, resp.Level, resp.Label)
+fmt.Println(resp.Reason)
+fmt.Println(resp.Usage)
+```
+
+**请求字段**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `Text` | `string` | 是 | 待审核文本，对应 JSON 字段 `text` |
+| `Canary` | `string` | 否 | 灰度分支，`A` 表示外部 LLM API 失败降级 vLLM，`B` 表示本地 vLLM |
+| `Scene` | `string` | 否 | 业务场景标识，例如 `user_name`、`bio`、`comment`、`seasoul` |
+
+**响应字段**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `OK` | `bool` | 是否审核成功 |
+| `Level` | `int` | 风险等级，范围 `0-6`，数值越大风险越高 |
+| `Label` | `string` | 分类标签，英文 |
+| `Reason` | `string` | 判定理由，英文或错误原因 |
+| `Usage` | `*Usage` | 网关注入的计费信息，`Usage.Cost` 为本次调用费用 |
+| `Extra` | `map[string]any` | 上游返回的未建模字段 |
+
+**审核通过响应示例**
+
+```json
+{
+  "ok": true,
+  "level": 0,
+  "label": "normal",
+  "reason": "Neutral greeting expression",
+  "usage": {
+    "cost": "0.001"
+  }
+}
+```
+
+**命中风险响应示例**
+
+```json
+{
+  "ok": true,
+  "level": 5,
+  "label": "pornography",
+  "reason": "Explicit sexual description",
+  "usage": {
+    "cost": "0.001"
   }
 }
 ```

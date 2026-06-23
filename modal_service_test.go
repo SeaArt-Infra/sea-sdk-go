@@ -614,6 +614,72 @@ func TestModalScanText_RequiresText(t *testing.T) {
 	}
 }
 
+func TestModalScanTextContent_PostsTextContentScanRequest(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/v1/text/content/scan" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("unexpected authorization: %s", got)
+		}
+		if got := r.Header.Get("X-Trace-Id"); got != "trace-content-text" {
+			t.Fatalf("unexpected trace header: %s", got)
+		}
+
+		body := extractBody(t, r)
+		if body["text"] != "hello world" {
+			t.Fatalf("unexpected text: %v", body["text"])
+		}
+		if body["canary"] != "A" {
+			t.Fatalf("unexpected canary: %v", body["canary"])
+		}
+		if body["scene"] != "user_name" {
+			t.Fatalf("unexpected scene: %v", body["scene"])
+		}
+
+		writeJSON(w, 200, map[string]any{
+			"ok":         true,
+			"level":      5,
+			"label":      "pornography",
+			"reason":     "Explicit sexual description",
+			"usage":      map[string]any{"cost": "0.001"},
+			"request_id": "content-text-risk-1",
+		})
+	})
+
+	resp, err := client.Modal.ScanTextContent(context.Background(), sa.TextContentScanRequest{
+		Text:   "hello world",
+		Canary: "A",
+		Scene:  "user_name",
+	}, sa.WithHeader("X-Trace-Id", "trace-content-text"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.OK || resp.Level != 5 || resp.Label != "pornography" || resp.Reason != "Explicit sexual description" {
+		t.Fatalf("unexpected text content scan response: %+v", resp)
+	}
+	if resp.Usage == nil || resp.Usage.Cost.String() != "0.001" {
+		t.Fatalf("unexpected usage: %+v", resp.Usage)
+	}
+	if resp.Extra["request_id"] != "content-text-risk-1" {
+		t.Fatalf("unexpected extra fields: %+v", resp.Extra)
+	}
+}
+
+func TestModalScanTextContent_RequiresText(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("request should not be sent: %s %s", r.Method, r.URL.Path)
+	})
+
+	_, err := client.Modal.ScanTextContent(context.Background(), sa.TextContentScanRequest{Text: " "})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 func TestModalScanAudio_PostsAudioScanRequest(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

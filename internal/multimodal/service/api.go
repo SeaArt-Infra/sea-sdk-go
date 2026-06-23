@@ -25,6 +25,8 @@ const (
 	PathFaceScan = "/v1/face/scan"
 	// PathTextScan is the sensitive-word scan endpoint used for text prompts.
 	PathTextScan = "/v1/text/scan"
+	// PathTextContentScan is the content-safety scan endpoint used for short text.
+	PathTextContentScan = "/v1/text/content/scan"
 	// PathAudioScan is the audio moderation scan endpoint.
 	PathAudioScan = "/v1/audio/scan"
 )
@@ -150,6 +152,27 @@ func ScanText(client *transport.Client, ctx context.Context, req mmtypes.TextSca
 	}
 
 	var resp mmtypes.TextScanResponse
+	if err := decode(payload, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ScanTextContent sends a short-text content-safety scan request to PathTextContentScan.
+func ScanTextContent(client *transport.Client, ctx context.Context, req mmtypes.TextContentScanRequest, headers http.Header) (*mmtypes.TextContentScanResponse, error) {
+	if strings.TrimSpace(req.Text) == "" {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "text is required"}
+	}
+
+	status, payload, err := client.Request(ctx, http.MethodPost, PathTextContentScan, req, headers)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, httpError(status, payload)
+	}
+
+	var resp mmtypes.TextContentScanResponse
 	if err := decode(payload, &resp); err != nil {
 		return nil, err
 	}

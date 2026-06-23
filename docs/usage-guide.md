@@ -319,6 +319,27 @@ fmt.Println(resp.Data.Combination)
 
 `AreaTypes` 可选 `TextScanAreaTypeAll`、`TextScanAreaTypeDomestic`、`TextScanAreaTypeForeign`。`Way` 可选 `TextScanWayDictionary`、`TextScanWayModel`、`TextScanWayMixed`、`TextScanWayCharacter`。敏感词索引 `StartIndex` / `EndIndex` 基于 rune 数组；`IsSensitive` 表示整体是否命中敏感内容，`Combination` 保留组合规则命中详情，未建模字段会保留在 `Extra`。
 
+
+## 文本内容安全审核
+
+文本内容安全审核接口对应 `POST /v1/text/content/scan`，用于对短文本进行内容安全审核，返回风险等级、分类标签和判定理由。该接口不影响旧敏感词检测接口 `POST /v1/text/scan`。
+
+```go
+resp, err := client.Modal.ScanTextContent(ctx, sa.TextContentScanRequest{
+    Text:   "hello world",
+    Canary: "A",
+    Scene:  "user_name",
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.OK, resp.Level, resp.Label)
+fmt.Println(resp.Reason)
+fmt.Println(resp.Usage)
+```
+
+`TextContentScanRequest` 包含必填 `Text`，以及可选 `Canary` 和 `Scene`。响应 `TextContentScanResponse` 包含 `OK`、`Level`、`Label`、`Reason`、`Usage` 和未建模字段 `Extra`。
+
 ## 人脸检测
 
 人脸检测接口对应 `POST /v1/face/scan`，用于图片或视频人脸检测。网关会转发到上游 `/cloud/face/scan`。

@@ -69,6 +69,11 @@ func (m *ModalService) ScanText(ctx context.Context, req TextScanRequest, opts .
 	return mmservice.ScanText(m.client, ctx, mmtypes.TextScanRequest(req), buildRequestOptions(opts).headers)
 }
 
+// ScanTextContent scans short text through ModelBaseURL + /v1/text/content/scan.
+func (m *ModalService) ScanTextContent(ctx context.Context, req TextContentScanRequest, opts ...RequestOption) (*TextContentScanResponse, error) {
+	return mmservice.ScanTextContent(m.client, ctx, mmtypes.TextContentScanRequest(req), buildRequestOptions(opts).headers)
+}
+
 // ScanAudio scans audio through ModelBaseURL + /v1/audio/scan.
 func (m *ModalService) ScanAudio(ctx context.Context, req AudioScanRequest, opts ...RequestOption) (*AudioScanResponse, error) {
 	return mmservice.ScanAudio(m.client, ctx, mmtypes.AudioScanRequest(req), buildRequestOptions(opts).headers)

@@ -53,6 +53,12 @@ type TextScanRequest = mmtypes.TextScanRequest
 // TextScanResponse is the parsed response returned by POST /v1/text/scan.
 type TextScanResponse = mmtypes.TextScanResponse
 
+// TextContentScanRequest is the request body for POST /v1/text/content/scan.
+type TextContentScanRequest = mmtypes.TextContentScanRequest
+
+// TextContentScanResponse is the parsed response returned by POST /v1/text/content/scan.
+type TextContentScanResponse = mmtypes.TextContentScanResponse
+
 // TextScanData contains text moderation results.
 type TextScanData = mmtypes.TextScanData
 

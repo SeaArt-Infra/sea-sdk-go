@@ -368,6 +368,58 @@ func (r *TextScanResponse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// TextContentScanRequest is the request body for POST /v1/text/content/scan.
+type TextContentScanRequest struct {
+	// Text is the short text content to scan for content-safety risk.
+	Text string `json:"text"`
+	// Canary selects the canary branch. A routes to the external LLM API with vLLM
+	// fallback, and B routes to local vLLM.
+	Canary string `json:"canary,omitempty"`
+	// Scene is the business scenario identifier, for example user_name, bio,
+	// comment, or seasoul.
+	Scene string `json:"scene,omitempty"`
+}
+
+// TextContentScanResponse is the parsed response returned by POST /v1/text/content/scan.
+//
+// Extra keeps any upstream response fields that are not modeled by the SDK yet.
+type TextContentScanResponse struct {
+	// OK reports whether the scan service completed the business request successfully.
+	OK bool `json:"ok"`
+	// Level is the risk level, usually 0-6. Higher values indicate higher risk.
+	Level int `json:"level"`
+	// Label is the English risk category label.
+	Label string `json:"label,omitempty"`
+	// Reason contains the judgment reason or business error reason.
+	Reason string `json:"reason,omitempty"`
+	// Usage contains gateway billing metadata injected by inference-gateway.
+	Usage *Usage `json:"usage,omitempty"`
+	// Extra contains upstream response fields that are not modeled by the SDK yet.
+	Extra map[string]any `json:"-"`
+}
+
+func (r *TextContentScanResponse) UnmarshalJSON(data []byte) error {
+	type alias TextContentScanResponse
+	var typed alias
+	if err := json.Unmarshal(data, &typed); err != nil {
+		return err
+	}
+
+	var extra map[string]any
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	delete(extra, "ok")
+	delete(extra, "level")
+	delete(extra, "label")
+	delete(extra, "reason")
+	delete(extra, "usage")
+
+	*r = TextContentScanResponse(typed)
+	r.Extra = extra
+	return nil
+}
+
 // FaceScanRequest is the request body for POST /v1/face/scan.
 type FaceScanRequest struct {
 	// URI is the image or video URL to scan.
