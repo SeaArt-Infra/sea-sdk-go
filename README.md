@@ -1,37 +1,37 @@
 # Sea Go SDK
 
-Sea AI 平台 Go SDK，用于通过统一网关调用多模态、LLM 和厂商透传能力。
+Sea AI Platform Go SDK for calling multimodal, LLM, and vendor passthrough capabilities through the unified gateway.
 
-特点：
+Features:
 
-- 纯标准库实现，无第三方运行时依赖
-- 保留原始请求透传能力
-- 支持 SSE 流式响应解析
-- 支持任务轮询和通用 task builder
+- Standard-library implementation with no third-party runtime dependencies
+- Preserves raw request passthrough capabilities
+- Supports SSE streaming response parsing
+- Supports task polling and a general task builder
 
-## 功能导航
+## Feature Navigation
 
-| 服务 | Client 字段 | 功能 |
+| Service | Client Field | Capability |
 |------|-------------|------|
-| [多模态 API](#多模态-api) | `client.Modal` | 模型列表、参数详情、生成任务、预扣费查询和厂商透传 |
-| [图片/视频鉴黄](#图片视频鉴黄) | `client.Modal.ScanImage(...)` | 检测图片、GIF 或视频内容安全风险 |
-| [敏感词检测](#敏感词检测) | `client.Modal.ScanText(...)` | 检测文本敏感词和组合词风险 |
-| [文本内容安全审核](#文本内容安全审核) | `client.Modal.ScanTextContent(...)` | 审核短文本内容安全风险等级和分类标签 |
-| [人脸检测](#人脸检测) | `client.Modal.ScanFace(...)` | 检测图片或视频中的人脸相关结果 |
-| [音频检测](#音频检测) | `client.Modal.ScanAudio(...)` | 检测音频内容风险 |
-| [大语言模型 API](#大语言模型-api) | `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank 等兼容接口 |
+| [Multimodal API](#multimodal-api) | `client.Modal` | Model listing, parameter details, generation tasks, precharge estimates, and vendor passthrough |
+| [Image/Video Safety Scan](#imagevideo-safety-scan) | `client.Modal.ScanImage(...)` | Detect content-safety risks in images, GIFs, or videos |
+| [Sensitive-Word Scan](#sensitive-word-scan) | `client.Modal.ScanText(...)` | Detect sensitive words and combination-rule risks in text |
+| [Text Content Safety Scan](#text-content-safety-scan) | `client.Modal.ScanTextContent(...)` | Review short text risk level and category label |
+| [Face Scan](#face-scan) | `client.Modal.ScanFace(...)` | Detect face-related results in images or videos |
+| [Audio Scan](#audio-scan) | `client.Modal.ScanAudio(...)` | Detect audio content risks |
+| [LLM API](#llm-api) | `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank compatible APIs |
 
-## 安装
+## Installation
 
 ```bash
 go get github.com/SeaArt-Infra/sea-sdk-go.git
 ```
 
-要求：
+Requirements:
 
 - Go 1.22+
 
-## 初始化
+## Initialization
 
 ```go
 client, err := sa.New(&sa.ClientConfig{
@@ -42,7 +42,7 @@ if err != nil {
 }
 ```
 
-通过 `BaseURL` 配置统一网关地址，SDK 会基于该地址调用多模态、LLM 和透传等能力。
+Configure the unified gateway address through `BaseURL`. The SDK uses it to call multimodal, LLM, and passthrough capabilities.
 
 ```go
 client, err := sa.New(&sa.ClientConfig{
@@ -56,9 +56,9 @@ if err != nil {
 }
 ```
 
-## 多模态 API
+## Multimodal API
 
-### 模型列表和参数详情
+### Model List and Parameter Details
 
 ```go
 models, err := client.Modal.ListModels(ctx, sa.ModalModelSearchParams{
@@ -79,7 +79,7 @@ if err != nil {
 fmt.Println(skill)
 ```
 
-`ListModels` / `SearchModels` 支持的查询参数：
+`ListModels` / `SearchModels` supports these query parameters:
 
 - `Query` -> `q`
 - `Input` -> `input`
@@ -88,11 +88,11 @@ fmt.Println(skill)
 - `Provider` -> `provider`
 - `Limit` -> `limit`
 
-### 生成任务
+### Generation Tasks
 
-创建任务有两种常用方式：直接传入原始请求 `JSONMap`，或使用 `NewTask` typed helper 构造请求体。两种方式最终都会调用 `client.Modal.Create(...)`。
+There are two common ways to create a task: pass a raw `JSONMap`, or use the `NewTask` typed helper to build the request body. Both ultimately call `client.Modal.Create(...)`.
 
-**方式一：直接传入原始请求 JSONMap**
+**Option 1: Pass a raw request JSONMap**
 
 ```go
 task, err := client.Modal.Create(ctx, sa.JSONMap{
@@ -103,7 +103,7 @@ task, err := client.Modal.Create(ctx, sa.JSONMap{
             "params": map[string]any{
                 "input": map[string]any{
                     "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-                    "prompt":  "小狗和女孩在秋天的公园里快乐地玩耍",
+                    "prompt":  "A dog and a girl playing happily in an autumn park",
                 },
                 "parameters": map[string]any{
                     "resolution":    "720P",
@@ -121,9 +121,9 @@ if err != nil {
 fmt.Println(task.ID, task.Status)
 ```
 
-`moderation` 为布尔类型，非必传；`true` 表示开白，`false` 表示非开白。`params` 为模型参数，具体结构由模型定义决定。
+`moderation` is a boolean and optional. `true` enables moderation allowlisting, while `false` disables it. `params` contains model parameters, whose structure is defined by the model.
 
-**方式二：使用 Typed helper 构造请求体**
+**Option 2: Build the request body with the typed helper**
 
 ```go
 body := sa.NewTask("alibaba_wanx26_i2v_flash").
@@ -131,7 +131,7 @@ body := sa.NewTask("alibaba_wanx26_i2v_flash").
     Params(map[string]any{
         "input": map[string]any{
             "img_url": "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-            "prompt":  "小狗和女孩在秋天的公园里快乐地玩耍",
+            "prompt":  "A dog and a girl playing happily in an autumn park",
         },
         "parameters": map[string]any{
             "resolution":    "720P",
@@ -149,7 +149,7 @@ if err != nil {
 }
 ```
 
-**轮询结果**
+**Poll results**
 
 ```go
 task, err := client.Modal.Wait(
@@ -164,7 +164,7 @@ if err != nil {
 fmt.Println(task.Status, task.Progress, task.URLs())
 ```
 
-也可以在创建后继续等待：
+You can also continue waiting after creation:
 
 ```go
 task, err := client.Modal.Create(ctx, sa.JSONMap{"model": "alibaba_wanx26_i2v_flash"})
@@ -178,11 +178,11 @@ if err != nil {
 }
 ```
 
-### 预扣费查询
+### Precharge Estimate
 
-预扣费查询请求参数与创建任务相同，可用于提前预估费用。支持两种常用方式：直接传入原始请求 `JSONMap`，或使用 `NewTask` typed helper 构造请求体。
+The precharge request uses the same parameters as task creation and can estimate costs in advance. It supports two common request styles: pass a raw `JSONMap`, or build the request body with the `NewTask` typed helper.
 
-**方式一：直接传入原始请求 JSONMap**
+**Option 1: Pass a raw request JSONMap**
 
 ```go
 resp, err := client.Modal.Precharge(ctx, sa.JSONMap{
@@ -205,7 +205,7 @@ fmt.Println(resp.Status)
 fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
 ```
 
-**方式二：使用 Typed helper 构造请求体**
+**Option 2: Build the request body with the typed helper**
 
 ```go
 body := sa.NewTask("volces_seedream_4_5").
@@ -225,7 +225,7 @@ fmt.Println(resp.Status)
 fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
 ```
 
-**响应示例**
+**Response example**
 
 ```json
 {
@@ -244,11 +244,11 @@ fmt.Println(resp.Data.BillingModel, resp.Data.Cost, resp.Data.Currency)
 }
 ```
 
-### Passthrough API（厂商透传）
+### Passthrough API (Vendor Passthrough)
 
-Passthrough 层保留厂商原始 API 形态。路径需要带厂商前缀，例如 `/kling/...`、`/vidu/...`、`/google/...`。
+The passthrough layer preserves vendor-native API shapes. Paths must include a vendor prefix, such as `/kling/...`, `/vidu/...`, or `/google/...`.
 
-**方式一：JSON object 请求**
+**Option 1: JSON object request**
 
 ```go
 resp, err := client.Passthrough.Post(ctx, "/kling/v1/videos/text2video", sa.JSONMap{
@@ -261,7 +261,7 @@ if err != nil {
 fmt.Println(resp.StatusCode, string(resp.Body))
 ```
 
-**方式二：原始字节透传**
+**Option 2: Raw byte passthrough**
 
 ```go
 resp, err := client.Passthrough.RequestRaw(
@@ -276,7 +276,7 @@ if err != nil {
 fmt.Println(resp.StatusCode, string(resp.Body))
 ```
 
-当前提供：
+Currently available:
 
 - `Request`
 - `RequestRaw`
@@ -285,9 +285,9 @@ fmt.Println(resp.StatusCode, string(resp.Body))
 - `Put`
 - `Delete`
 
-## 图片/视频鉴黄
+## Image/Video Safety Scan
 
-图片/视频鉴黄接口对应 `POST /v1/image/scan`，用于对图片、GIF 或视频内容进行安全风险检测。调用时需要提供待检测媒体 URL，并通过 `RiskTypes` 指定需要检测的风险类型。
+The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images, GIFs, or videos. Provide the media URL and use `RiskTypes` to specify risk categories to detect.
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -307,7 +307,7 @@ if err != nil {
 fmt.Println(resp.OK, resp.NSFWLevel, resp.RiskTypes)
 ```
 
-也支持视频检测：
+Video scans are also supported:
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -318,7 +318,7 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
 })
 ```
 
-**审核通过响应示例**
+**Pass response example**
 
 ```json
 {
@@ -332,7 +332,7 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
 }
 ```
 
-**命中风险响应示例**
+**Risk-hit response example**
 
 ```json
 {
@@ -352,9 +352,9 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
 }
 ```
 
-## 敏感词检测
+## Sensitive-Word Scan
 
-敏感词检测接口对应 `POST /v1/text/scan`，用于检测输入文本中的敏感词、组合词和风险命中结果。
+The sensitive-word scan endpoint is `POST /v1/text/scan`. It detects sensitive words, combination rules, and risk hits in input text.
 
 ```go
 resp, err := client.Modal.ScanText(ctx, sa.TextScanRequest{
@@ -371,7 +371,7 @@ fmt.Println(resp.Data.SensitiveWords)
 fmt.Println(resp.Extra)
 ```
 
-**审核通过响应示例**
+**Pass response example**
 
 ```json
 {
@@ -392,9 +392,9 @@ fmt.Println(resp.Extra)
 ```
 
 
-## 文本内容安全审核
+## Text Content Safety Scan
 
-文本内容安全审核接口对应 `POST /v1/text/content/scan`，用于对短文本进行内容安全审核，返回风险等级、分类标签和判定理由。该接口不影响旧敏感词检测接口 `POST /v1/text/scan`。
+The text content safety scan endpoint is `POST /v1/text/content/scan`. It reviews short text and returns the risk level, category label, and judgment reason. This endpoint does not affect the legacy sensitive-word scan endpoint `POST /v1/text/scan`.
 
 ```go
 resp, err := client.Modal.ScanTextContent(ctx, sa.TextContentScanRequest{
@@ -410,26 +410,26 @@ fmt.Println(resp.Reason)
 fmt.Println(resp.Usage)
 ```
 
-**请求字段**
+**Request fields**
 
-| 字段 | 类型 | 必填 | 说明 |
+| Field | Type | Required | Description |
 |------|------|------|------|
-| `Text` | `string` | 是 | 待审核文本，对应 JSON 字段 `text` |
-| `Canary` | `string` | 否 | 灰度分支，`A` 表示外部 LLM API 失败降级 vLLM，`B` 表示本地 vLLM |
-| `Scene` | `string` | 否 | 业务场景标识，例如 `user_name`、`bio`、`comment`、`seasoul` |
+| `Text` | `string` | Yes | Text to review. Corresponds to JSON field `text` |
+| `Canary` | `string` | No | Canary branch. `A` means external LLM API with vLLM fallback; `B` means local vLLM |
+| `Scene` | `string` | No | Business scenario identifier, such as `user_name`, `bio`, `comment`, or `seasoul` |
 
-**响应字段**
+**Response fields**
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `OK` | `bool` | 是否审核成功 |
-| `Level` | `int` | 风险等级，范围 `0-6`，数值越大风险越高 |
-| `Label` | `string` | 分类标签，英文 |
-| `Reason` | `string` | 判定理由，英文或错误原因 |
-| `Usage` | `*Usage` | 网关注入的计费信息，`Usage.Cost` 为本次调用费用 |
-| `Extra` | `map[string]any` | 上游返回的未建模字段 |
+| `OK` | `bool` | Whether the review succeeded |
+| `Level` | `int` | Risk level from `0` to `6`; higher values indicate higher risk |
+| `Label` | `string` | Category label in English |
+| `Reason` | `string` | Judgment reason in English or error reason |
+| `Usage` | `*Usage` | Gateway-injected billing metadata. `Usage.Cost` is the cost of this call |
+| `Extra` | `map[string]any` | Upstream fields not modeled by the SDK |
 
-**审核通过响应示例**
+**Pass response example**
 
 ```json
 {
@@ -443,7 +443,7 @@ fmt.Println(resp.Usage)
 }
 ```
 
-**命中风险响应示例**
+**Risk-hit response example**
 
 ```json
 {
@@ -457,9 +457,9 @@ fmt.Println(resp.Usage)
 }
 ```
 
-## 人脸检测
+## Face Scan
 
-人脸检测接口对应 `POST /v1/face/scan`，用于检测图片或视频中的人脸相关结果。调用时可以传入媒体 URL，也可以传入图片 base64 内容。
+The face scan endpoint is `POST /v1/face/scan`. It detects face-related results in images or videos. You can pass either a media URL or base64 image content.
 
 ```go
 resp, err := client.Modal.ScanFace(ctx, sa.FaceScanRequest{
@@ -474,33 +474,16 @@ fmt.Println(resp.OK, resp.Usage)
 fmt.Println(resp.Extra)
 ```
 
-**响应字段**
+**Response fields**
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `OK` | `bool` | 检测请求是否成功完成 |
-| `Error` | `string` | 上游业务错误信息；成功时通常为空 |
-| `Usage` | `*Usage` | 网关注入的计费信息 |
-| `Extra` | `map[string]any` | 上游返回的未建模字段，例如风险等级、标签、人脸数量等 |
+| `OK` | `bool` | Whether the scan request completed successfully |
+| `Error` | `string` | Upstream business error message. Usually empty on success |
+| `Usage` | `*Usage` | Gateway-injected billing metadata |
+| `Extra` | `map[string]any` | Upstream fields not modeled by the SDK, such as risk level, labels, face count, and more |
 
-**不含人脸图片响应示例（SDK 返回结构）**
-
-```json
-{
-  "ok": true,
-  "error": "",
-  "usage": {
-    "cost": "1"
-  },
-  "extra": {
-    "nsfw_level": 0,
-    "label_items": [],
-    "risk_types": []
-  }
-}
-```
-
-**含人脸图片响应示例（SDK 返回结构）**
+**No-face image response example (SDK return structure)**
 
 ```json
 {
@@ -517,9 +500,26 @@ fmt.Println(resp.Extra)
 }
 ```
 
-## 音频检测
+**Face image response example (SDK return structure)**
 
-音频检测接口对应 `POST /v1/audio/scan`，用于检测音频内容风险。调用时需要提供可访问的音频 URL，`Duration` 用于计费和统计。
+```json
+{
+  "ok": true,
+  "error": "",
+  "usage": {
+    "cost": "1"
+  },
+  "extra": {
+    "nsfw_level": 0,
+    "label_items": [],
+    "risk_types": []
+  }
+}
+```
+
+## Audio Scan
+
+The audio scan endpoint is `POST /v1/audio/scan`. It detects risks in audio content. Provide an accessible audio URL. `Duration` is used for billing and statistics.
 
 ```go
 resp, err := client.Modal.ScanAudio(ctx, sa.AudioScanRequest{
@@ -534,18 +534,18 @@ fmt.Println(resp.RiskLevel, resp.AllLabels)
 fmt.Println(resp.Extra)
 ```
 
-**审核通过响应示例**
+**Pass response example**
 
 ```json
 {
   "code": 1100,
-  "message": "成功",
+  "message": "success",
   "requestId": "a63b89046c70435a4fb9a0d36439d0ee",
   "btId": "https://example.com/audio/sample.mp3",
   "detail": {
     "audioDetail": [],
     "audioTags": {},
-    "audioText": "示例音频转写文本",
+    "audioText": "sample audio transcription text",
     "audioTime": 4,
     "code": 1100,
     "requestParams": {},
@@ -554,9 +554,9 @@ fmt.Println(resp.Extra)
 }
 ```
 
-## 大语言模型 API
+## LLM API
 
-LLM 方法均为同步调用，返回原始字节，使用 `sa.Decode[T](raw)` 反序列化。
+LLM methods are synchronous and return raw bytes. Use `sa.Decode[T](raw)` to deserialize them.
 
 ```go
 raw, err := client.LLM.ChatCompletions(ctx, sa.JSONMap{
@@ -577,21 +577,21 @@ if err != nil {
 fmt.Println(resp)
 ```
 
-当前支持的方法：
+Currently supported methods:
 
-| 方法 | 说明 |
+| Method | Description |
 |------|------|
-| `ChatCompletions` | 调用 OpenAI Chat Completions 兼容接口，返回原始响应字节 |
-| `ChatCompletionsStream` | 调用 Chat Completions 流式接口，返回承载 SSE 流式事件的 channel |
-| `Messages` | 调用 Anthropic Messages 兼容接口，返回原始响应字节 |
-| `MessagesStream` | 调用 Messages 流式接口，返回承载 SSE 流式事件的 channel |
-| `Responses` | 调用 OpenAI Responses 兼容接口，返回原始响应字节 |
-| `ResponsesStream` | 调用 Responses 流式接口，返回承载 SSE 流式事件的 channel |
-| `Rerank` | 调用文本重排接口 |
-| `Embeddings` | 调用向量生成接口 |
-| `ListModels` | 查询 LLM 模型列表 |
+| `ChatCompletions` | Calls the OpenAI-compatible Chat Completions API and returns raw response bytes |
+| `ChatCompletionsStream` | Calls the Chat Completions streaming API and returns a channel carrying SSE streaming events |
+| `Messages` | Calls the Anthropic Messages-compatible API and returns raw response bytes |
+| `MessagesStream` | Calls the Messages streaming API and returns a channel carrying SSE streaming events |
+| `Responses` | Calls the OpenAI-compatible Responses API and returns raw response bytes |
+| `ResponsesStream` | Calls the Responses streaming API and returns a channel carrying SSE streaming events |
+| `Rerank` | Calls the text reranking API |
+| `Embeddings` | Calls the embedding generation API |
+| `ListModels` | Queries the LLM model list |
 
-流式方法返回承载 SSE 流式事件的 channel：
+Streaming methods return a channel carrying SSE streaming events:
 
 ```go
 events, err := client.LLM.ChatCompletionsStream(ctx, sa.JSONMap{
