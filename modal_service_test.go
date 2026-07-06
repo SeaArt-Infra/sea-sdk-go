@@ -451,12 +451,41 @@ func TestModalScanImage_PostsImageScanRequest(t *testing.T) {
 	}
 }
 
-func TestModalScanImage_RequiresURI(t *testing.T) {
+func TestModalScanImage_AcceptsImgBase64(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/v1/image/scan" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		body := extractBody(t, r)
+		if _, ok := body["uri"]; ok {
+			t.Fatalf("unexpected uri: %v", body["uri"])
+		}
+		if body["img_base64"] != "abc123" {
+			t.Fatalf("unexpected img_base64: %v", body["img_base64"])
+		}
+
+		writeJSON(w, 200, map[string]any{"ok": true})
+	})
+
+	resp, err := client.Modal.ScanImage(context.Background(), sa.ImageScanRequest{ImgBase64: "abc123"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.OK {
+		t.Fatal("expected ok response")
+	}
+}
+
+func TestModalScanImage_RequiresURIOrImgBase64(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("request should not be sent: %s %s", r.Method, r.URL.Path)
 	})
 
-	_, err := client.Modal.ScanImage(context.Background(), sa.ImageScanRequest{URI: " "})
+	_, err := client.Modal.ScanImage(context.Background(), sa.ImageScanRequest{URI: " ", ImgBase64: " "})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

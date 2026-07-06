@@ -139,8 +139,10 @@ const (
 
 // ImageScanRequest is the request body for POST /v1/image/scan.
 type ImageScanRequest struct {
-	// URI is the image, GIF, or video URL to scan.
-	URI string `json:"uri"`
+	// URI is the image, GIF, or video URL to scan. URI or ImgBase64 is required.
+	URI string `json:"uri,omitempty"`
+	// ImgBase64 is a base64-encoded image payload. URI or ImgBase64 is required.
+	ImgBase64 string `json:"img_base64,omitempty"`
 	// RiskTypes limits detection to the requested safety categories.
 	RiskTypes []ImageScanRiskType `json:"risk_types"`
 	// DetectedAge enables age-group detection when set to 1; set to 0 to disable it.

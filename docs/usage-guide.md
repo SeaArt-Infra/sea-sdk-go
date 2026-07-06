@@ -251,7 +251,7 @@ type PassthroughResponse struct {
 
 ## Image/Video Safety Scan
 
-The safety scan API maps to `POST /v1/image/scan` and is used for risk detection on images, GIFs, or videos.
+The safety scan API maps to `POST /v1/image/scan` and is used for risk detection on images, GIFs, or videos. Provide either `URI` or `ImgBase64`.
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{

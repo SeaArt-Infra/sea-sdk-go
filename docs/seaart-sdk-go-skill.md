@@ -202,7 +202,7 @@ for _, output := range task.Output {
 
 ### Image/Video Safety Scan
 
-Use `client.Modal.ScanImage` to call `ModelBaseURL + /v1/image/scan`.
+Use `client.Modal.ScanImage` to call `ModelBaseURL + /v1/image/scan`. Pass either `URI` or `ImgBase64`.
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
