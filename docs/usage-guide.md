@@ -251,7 +251,7 @@ type PassthroughResponse struct {
 
 ## Image/Video Safety Scan
 
-The safety scan API maps to `POST /v1/image/scan` and is used for risk detection on images, GIFs, or videos. Provide either `URI` or `ImgBase64`.
+The safety scan API maps to `POST /v1/image/scan` and is used for risk detection on images or videos. Provide either `URI` or `ImgBase64`; videos must use `URI`.
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -262,8 +262,10 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
         sa.ImageScanRiskTypeViolent,
         sa.ImageScanRiskTypeChild,
     },
-    DetectedAge: 0,
-    IsVideo:     0,
+    DetectedAge: true,
+    IsVideo:     false,
+    Canary:      "B",
+    Scene:       "avatar",
 })
 if err != nil {
     log.Fatal(err)
@@ -275,16 +277,24 @@ for _, label := range resp.LabelItems {
 }
 ```
 
-For video detection, set `IsVideo: 1` and optionally pass `Duration`:
+For video detection, set `IsVideo: true` and optionally pass `Duration`. Video scans must use `URI` and do not support `ImgBase64`:
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
     URI:       "https://example.com/video.mp4",
     RiskTypes: []sa.ImageScanRiskType{sa.ImageScanRiskTypeErotic, sa.ImageScanRiskTypeViolent},
-    IsVideo:   1,
+    IsVideo:   true,
     Duration:  12.5,
 })
 ```
+
+Base64 image content is also supported for image scans:
+
+```go
+resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{ImgBase64: "base64-image-content"})
+```
+
+Pass `CallbackURL` to enable async processing; `CallbackContext` is returned unchanged in the callback.
 
 Risk type descriptions:
 

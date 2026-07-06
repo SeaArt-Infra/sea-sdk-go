@@ -139,16 +139,24 @@ const (
 
 // ImageScanRequest is the request body for POST /v1/image/scan.
 type ImageScanRequest struct {
-	// URI is the image, GIF, or video URL to scan. URI or ImgBase64 is required.
+	// URI is the image or video URL to scan. URI or ImgBase64 is required; videos must use URI.
 	URI string `json:"uri,omitempty"`
-	// ImgBase64 is a base64-encoded image payload. URI or ImgBase64 is required.
+	// ImgBase64 is a base64-encoded image payload. URI or ImgBase64 is required; videos are not supported.
 	ImgBase64 string `json:"img_base64,omitempty"`
-	// RiskTypes limits detection to the requested safety categories.
-	RiskTypes []ImageScanRiskType `json:"risk_types"`
-	// DetectedAge enables age-group detection when set to 1; set to 0 to disable it.
-	DetectedAge int `json:"detected_age"`
-	// IsVideo marks the URI as video content when set to 1; images and GIFs use 0.
-	IsVideo int `json:"is_video"`
+	// IsVideo marks the URI as video content. bool is preferred; legacy 0/1 values are also accepted.
+	IsVideo any `json:"is_video,omitempty"`
+	// CallbackURL is an HTTP/HTTPS callback URL. Passing it enables async processing.
+	CallbackURL string `json:"callback_url,omitempty"`
+	// CallbackContext is caller passthrough data returned unchanged in the callback. Maximum 16KB.
+	CallbackContext map[string]any `json:"callback_context,omitempty"`
+	// RiskTypes limits detection to the requested safety categories. If empty, all risk types are detected.
+	RiskTypes []ImageScanRiskType `json:"risk_types,omitempty"`
+	// DetectedAge enables age-group detection. bool is preferred; legacy 0/1 values are also accepted.
+	DetectedAge any `json:"detected_age,omitempty"`
+	// Canary is the canary routing parameter. The gateway defaults to B.
+	Canary string `json:"canary,omitempty"`
+	// Scene identifies the detection scene for label-level config lookup and metrics.
+	Scene string `json:"scene,omitempty"`
 	// Duration is the video duration in seconds and is used for video billing when known.
 	Duration float64 `json:"duration,omitempty"`
 }
