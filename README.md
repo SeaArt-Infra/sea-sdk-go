@@ -287,7 +287,7 @@ Currently available:
 
 ## Image/Video Safety Scan
 
-The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images, GIFs, or videos. Provide the media URL and use `RiskTypes` to specify risk categories to detect.
+The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images, GIFs, or videos. Provide either the media URL or base64 image content, and use `RiskTypes` to specify risk categories to detect.
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -316,6 +316,12 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
     IsVideo:   1,
     Duration:  12.5,
 })
+```
+
+Base64 image content is also supported:
+
+```go
+resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{ImgBase64: "base64-image-content"})
 ```
 
 **Pass response example**

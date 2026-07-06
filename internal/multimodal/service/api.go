@@ -118,8 +118,9 @@ func GetModelSkill(client *transport.Client, ctx context.Context, model string, 
 // ScanImage sends an image, GIF, or video safety scan request to PathImageScan.
 func ScanImage(client *transport.Client, ctx context.Context, req mmtypes.ImageScanRequest, headers http.Header) (*mmtypes.ImageScanResponse, error) {
 	req.URI = strings.TrimSpace(req.URI)
-	if req.URI == "" {
-		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "uri is required"}
+	req.ImgBase64 = strings.TrimSpace(req.ImgBase64)
+	if req.URI == "" && req.ImgBase64 == "" {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "uri or img_base64 is required"}
 	}
 
 	status, payload, err := client.Request(ctx, http.MethodPost, PathImageScan, req, headers)
