@@ -202,7 +202,7 @@ for _, output := range task.Output {
 
 ### Image/Video Safety Scan
 
-Use `client.Modal.ScanImage` to call `ModelBaseURL + /v1/image/scan`. Pass either `URI` or `ImgBase64`.
+Use `client.Modal.ScanImage` to call `ModelBaseURL + /v1/image/scan`. Pass either `URI` or `ImgBase64`; videos must use `URI`. Pass `CallbackURL` to enable async processing.
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -213,7 +213,9 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
         sa.ImageScanRiskTypeViolent,
         sa.ImageScanRiskTypeChild,
     },
-    IsVideo: 0,
+    IsVideo: false,
+    Canary:  "B",
+    Scene:   "avatar",
 })
 if err != nil {
     log.Fatal(err)

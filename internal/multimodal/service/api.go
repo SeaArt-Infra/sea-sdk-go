@@ -122,6 +122,12 @@ func ScanImage(client *transport.Client, ctx context.Context, req mmtypes.ImageS
 	if req.URI == "" && req.ImgBase64 == "" {
 		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "uri or img_base64 is required"}
 	}
+	if req.URI != "" && req.ImgBase64 != "" {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "uri and img_base64 are mutually exclusive"}
+	}
+	if truthy(req.IsVideo) && req.ImgBase64 != "" {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "video scans require uri and do not support img_base64"}
+	}
 
 	status, payload, err := client.Request(ctx, http.MethodPost, PathImageScan, req, headers)
 	if err != nil {
@@ -136,6 +142,39 @@ func ScanImage(client *transport.Client, ctx context.Context, req mmtypes.ImageS
 		return nil, err
 	}
 	return &resp, nil
+}
+
+func truthy(value any) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case int:
+		return typed != 0
+	case int8:
+		return typed != 0
+	case int16:
+		return typed != 0
+	case int32:
+		return typed != 0
+	case int64:
+		return typed != 0
+	case uint:
+		return typed != 0
+	case uint8:
+		return typed != 0
+	case uint16:
+		return typed != 0
+	case uint32:
+		return typed != 0
+	case uint64:
+		return typed != 0
+	case float32:
+		return typed != 0
+	case float64:
+		return typed != 0
+	default:
+		return false
+	}
 }
 
 // ScanText sends a sensitive-word scan request to PathTextScan.

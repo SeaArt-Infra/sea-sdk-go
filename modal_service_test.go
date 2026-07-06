@@ -402,11 +402,24 @@ func TestModalScanImage_PostsImageScanRequest(t *testing.T) {
 		if body["uri"] != "https://example.com/image.jpg" {
 			t.Fatalf("unexpected uri: %v", body["uri"])
 		}
-		if body["detected_age"] != float64(1) {
+		if body["detected_age"] != true {
 			t.Fatalf("unexpected detected_age: %v", body["detected_age"])
 		}
-		if body["is_video"] != float64(0) {
+		if body["is_video"] != false {
 			t.Fatalf("unexpected is_video: %v", body["is_video"])
+		}
+		if body["callback_url"] != "https://example.com/callback" {
+			t.Fatalf("unexpected callback_url: %v", body["callback_url"])
+		}
+		callbackContext := body["callback_context"].(map[string]any)
+		if callbackContext["trace_id"] != "trace-scan" {
+			t.Fatalf("unexpected callback_context: %v", callbackContext)
+		}
+		if body["canary"] != "B" {
+			t.Fatalf("unexpected canary: %v", body["canary"])
+		}
+		if body["scene"] != "avatar" {
+			t.Fatalf("unexpected scene: %v", body["scene"])
 		}
 		risks := body["risk_types"].([]any)
 		if len(risks) != 2 || risks[0] != "EROTIC" || risks[1] != "VIOLENT" {
@@ -432,7 +445,12 @@ func TestModalScanImage_PostsImageScanRequest(t *testing.T) {
 			sa.ImageScanRiskTypeErotic,
 			sa.ImageScanRiskTypeViolent,
 		},
-		DetectedAge: 1,
+		DetectedAge:     true,
+		IsVideo:         false,
+		CallbackURL:     "https://example.com/callback",
+		CallbackContext: map[string]any{"trace_id": "trace-scan"},
+		Canary:          "B",
+		Scene:           "avatar",
 	}, sa.WithHeader("X-Trace-Id", "trace-scan"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -486,6 +504,28 @@ func TestModalScanImage_RequiresURIOrImgBase64(t *testing.T) {
 	})
 
 	_, err := client.Modal.ScanImage(context.Background(), sa.ImageScanRequest{URI: " ", ImgBase64: " "})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestModalScanImage_RejectsURIAndImgBase64Together(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("request should not be sent: %s %s", r.Method, r.URL.Path)
+	})
+
+	_, err := client.Modal.ScanImage(context.Background(), sa.ImageScanRequest{URI: "https://example.com/image.jpg", ImgBase64: "abc123"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestModalScanImage_RejectsVideoWithImgBase64(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("request should not be sent: %s %s", r.Method, r.URL.Path)
+	})
+
+	_, err := client.Modal.ScanImage(context.Background(), sa.ImageScanRequest{ImgBase64: "abc123", IsVideo: true})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

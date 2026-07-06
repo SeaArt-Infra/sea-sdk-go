@@ -287,7 +287,7 @@ Currently available:
 
 ## Image/Video Safety Scan
 
-The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images, GIFs, or videos. Provide either the media URL or base64 image content, and use `RiskTypes` to specify risk categories to detect.
+The image/video safety scan endpoint is `POST /v1/image/scan`. It detects content-safety risks in images or videos. Provide either a media URL or base64 image content, and use `RiskTypes` to specify risk categories to detect.
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
@@ -298,8 +298,10 @@ resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
         sa.ImageScanRiskTypeViolent,
         sa.ImageScanRiskTypeChild,
     },
-    DetectedAge: 0,
-    IsVideo:     0,
+    DetectedAge: true,
+    IsVideo:     false,
+    Canary:      "B",
+    Scene:       "avatar",
 })
 if err != nil {
     log.Fatal(err)
@@ -307,22 +309,47 @@ if err != nil {
 fmt.Println(resp.OK, resp.NSFWLevel, resp.RiskTypes)
 ```
 
-Video scans are also supported:
+Video scans are also supported. Video scans must use `URI` and do not support `ImgBase64`:
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
     URI:       "https://example.com/video.mp4",
     RiskTypes: []sa.ImageScanRiskType{sa.ImageScanRiskTypeErotic, sa.ImageScanRiskTypeViolent},
-    IsVideo:   1,
+    IsVideo:   true,
     Duration:  12.5,
 })
 ```
 
-Base64 image content is also supported:
+Base64 image content is also supported for image scans:
 
 ```go
 resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{ImgBase64: "base64-image-content"})
 ```
+
+To process asynchronously, pass `CallbackURL`:
+
+```go
+resp, err := client.Modal.ScanImage(ctx, sa.ImageScanRequest{
+    URI:             "https://example.com/image.jpg",
+    CallbackURL:     "https://example.com/callback",
+    CallbackContext: map[string]any{"trace_id": "trace-123"},
+})
+```
+
+**Request fields**
+
+| Field | Type | Required | Description |
+|------|------|------|------|
+| `URI` | `string` | Conditionally required | Image or video URL to scan. Mutually exclusive with `ImgBase64`; videos must use `URI` |
+| `ImgBase64` | `string` | Conditionally required | Base64-encoded image content. Mutually exclusive with `URI`; videos are not supported |
+| `IsVideo` | `bool` or `0/1` | No | Whether the file is a video. Defaults to `false` |
+| `CallbackURL` | `string` | Yes for async | Callback URL after detection completes. Only HTTP/HTTPS is supported. Passing this field enables async processing |
+| `CallbackContext` | `map[string]any` | No | Caller passthrough fields. The server does not parse or modify them and returns them unchanged in the callback. Maximum 16KB |
+| `RiskTypes` | `[]ImageScanRiskType` | No | Risk categories to detect. If omitted, all risk types are detected |
+| `DetectedAge` | `bool` or `0/1` | No | Whether to perform age detection. Defaults to `false` |
+| `Canary` | `string` | No | Canary parameter. Defaults to `B` |
+| `Scene` | `string` | No | Scene identifier used for label-level config lookup and metrics |
+| `Duration` | `float64` | No | Video duration in seconds. Recommended for video scans |
 
 **Pass response example**
 
