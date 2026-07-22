@@ -74,6 +74,11 @@ func (m *ModalService) ScanTextContent(ctx context.Context, req TextContentScanR
 	return mmservice.ScanTextContent(m.client, ctx, mmtypes.TextContentScanRequest(req), buildRequestOptions(opts).headers)
 }
 
+// ScanVisualStructuredTextFusion scans a digital-human cover image and structured text together.
+func (m *ModalService) ScanVisualStructuredTextFusion(ctx context.Context, req VisualStructuredTextFusionScanRequest, opts ...RequestOption) (*VisualStructuredTextFusionScanResponse, error) {
+	return mmservice.ScanVisualStructuredTextFusion(m.client, ctx, mmtypes.VisualStructuredTextFusionScanRequest(req), buildRequestOptions(opts).headers)
+}
+
 // ScanAudio scans audio through ModelBaseURL + /v1/audio/scan.
 func (m *ModalService) ScanAudio(ctx context.Context, req AudioScanRequest, opts ...RequestOption) (*AudioScanResponse, error) {
 	return mmservice.ScanAudio(m.client, ctx, mmtypes.AudioScanRequest(req), buildRequestOptions(opts).headers)

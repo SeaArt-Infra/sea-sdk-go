@@ -430,6 +430,70 @@ func (r *TextContentScanResponse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// VisualStructuredTextFusionScanRequest is the request body for
+// POST /v1/visual/structured/text/fusion/scan.
+type VisualStructuredTextFusionScanRequest struct {
+	// TextDict contains the structured copy to scan, including nested fields and image URLs.
+	TextDict map[string]any `json:"text_dict"`
+	// ImgBase64 is the main image base64 content without a data URL prefix.
+	ImgBase64 string `json:"img_base64,omitempty"`
+	// URI is the public or internal URI of the main image.
+	URI string `json:"uri,omitempty"`
+	// BusinessType is the image small-model business type. The gateway defaults to v1.
+	BusinessType string `json:"business_type,omitempty"`
+	// DetectedAge is the known age. The downstream default is 0.
+	DetectedAge int `json:"detected_age,omitempty"`
+	// HashComparison enables hash comparison when set to 1.
+	HashComparison int `json:"hash_comparison,omitempty"`
+	// Canary selects the canary group. The downstream default is A.
+	Canary string `json:"canary,omitempty"`
+	// Mode selects the detection mode. The downstream default is mixed.
+	Mode string `json:"mode,omitempty"`
+	// OCR enables OCR when set to 1.
+	OCR int `json:"ocr,omitempty"`
+}
+
+// VisualStructuredTextFusionScanResponse is returned by
+// POST /v1/visual/structured/text/fusion/scan.
+type VisualStructuredTextFusionScanResponse struct {
+	OK          bool           `json:"ok"`
+	NSFWLevel   int            `json:"nsfw_level,omitempty"`
+	Reason      string         `json:"reason,omitempty"`
+	ImgReason   string         `json:"img_reason,omitempty"`
+	TextReason  string         `json:"text_reason,omitempty"`
+	IssueSource string         `json:"issue_source,omitempty"`
+	RiskKeys    []string       `json:"risk_keys,omitempty"`
+	Msg         string         `json:"msg,omitempty"`
+	Usage       *Usage         `json:"usage,omitempty"`
+	Extra       map[string]any `json:"-"`
+}
+
+func (r *VisualStructuredTextFusionScanResponse) UnmarshalJSON(data []byte) error {
+	type alias VisualStructuredTextFusionScanResponse
+	var typed alias
+	if err := json.Unmarshal(data, &typed); err != nil {
+		return err
+	}
+
+	var extra map[string]any
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	delete(extra, "ok")
+	delete(extra, "nsfw_level")
+	delete(extra, "reason")
+	delete(extra, "img_reason")
+	delete(extra, "text_reason")
+	delete(extra, "issue_source")
+	delete(extra, "risk_keys")
+	delete(extra, "msg")
+	delete(extra, "usage")
+
+	*r = VisualStructuredTextFusionScanResponse(typed)
+	r.Extra = extra
+	return nil
+}
+
 // FaceScanRequest is the request body for POST /v1/face/scan.
 type FaceScanRequest struct {
 	// URI is the image or video URL to scan.

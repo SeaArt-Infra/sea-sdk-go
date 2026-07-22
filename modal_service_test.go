@@ -749,6 +749,76 @@ func TestModalScanTextContent_RequiresText(t *testing.T) {
 	}
 }
 
+func TestModalScanVisualStructuredTextFusion_PostsRequest(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/v1/visual/structured/text/fusion/scan" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		body := extractBody(t, r)
+		textDict := body["text_dict"].(map[string]any)
+		if textDict["name"] != "小美" {
+			t.Fatalf("unexpected text_dict: %v", body["text_dict"])
+		}
+		if body["uri"] != "https://example.com/cover.jpg" {
+			t.Fatalf("unexpected uri: %v", body["uri"])
+		}
+		if body["business_type"] != "v1" || body["detected_age"] != float64(1) || body["hash_comparison"] != float64(1) {
+			t.Fatalf("unexpected options: %v", body)
+		}
+		if body["canary"] != "A" || body["mode"] != "mixed" || body["ocr"] != float64(1) {
+			t.Fatalf("unexpected routing options: %v", body)
+		}
+
+		writeJSON(w, 200, map[string]any{
+			"ok": true, "nsfw_level": 2, "reason": "detected risk",
+			"img_reason": "adult content", "text_reason": "inappropriate words",
+			"issue_source": "both", "risk_keys": []string{"description", "greeting"},
+			"usage": map[string]any{"cost": "0.001"}, "request_id": "fusion-1",
+		})
+	})
+
+	resp, err := client.Modal.ScanVisualStructuredTextFusion(context.Background(), sa.VisualStructuredTextFusionScanRequest{
+		TextDict:       map[string]any{"name": "小美", "greeting": "你好呀"},
+		URI:            "https://example.com/cover.jpg",
+		BusinessType:   "v1",
+		DetectedAge:    1,
+		HashComparison: 1,
+		Canary:         "A",
+		Mode:           "mixed",
+		OCR:            1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.OK || resp.NSFWLevel != 2 || resp.IssueSource != "both" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	if resp.Usage == nil || resp.Usage.Cost.String() != "0.001" || resp.Extra["request_id"] != "fusion-1" {
+		t.Fatalf("unexpected response metadata: %+v", resp)
+	}
+}
+
+func TestModalScanVisualStructuredTextFusionRequiresTextAndImage(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("request should not be sent: %s %s", r.Method, r.URL.Path)
+	})
+
+	_, err := client.Modal.ScanVisualStructuredTextFusion(context.Background(), sa.VisualStructuredTextFusionScanRequest{})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	_, err = client.Modal.ScanVisualStructuredTextFusion(context.Background(), sa.VisualStructuredTextFusionScanRequest{
+		TextDict: map[string]any{"name": "小美"},
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 func TestModalScanAudio_PostsAudioScanRequest(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

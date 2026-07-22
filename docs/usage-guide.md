@@ -350,6 +350,46 @@ fmt.Println(resp.Usage)
 
 `TextContentScanRequest` contains required `Text` plus optional `Canary` and `Scene`. `TextContentScanResponse` contains `OK`, `Level`, `Label`, `Reason`, `Usage`, and unmodeled fields in `Extra`.
 
+## Visual Structured Text Fusion Scan
+
+The visual structured text fusion scan endpoint is `POST /v1/visual/structured/text/fusion/scan`. It evaluates a digital-human cover image together with structured copy. `TextDict` supports nested objects, and image URLs inside it are also scanned.
+
+```go
+resp, err := client.Modal.ScanVisualStructuredTextFusion(ctx, sa.VisualStructuredTextFusionScanRequest{
+    URI: "https://example.com/cover.jpg",
+    TextDict: map[string]any{
+        "name":        "Xiaomei",
+        "personality": "Gentle and considerate",
+        "description": "Enjoys traveling",
+        "greeting":    "Hello",
+    },
+    BusinessType: "v1",
+    Canary:       "A",
+    Mode:         "mixed",
+    OCR:          1,
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.OK, resp.NSFWLevel, resp.IssueSource, resp.RiskKeys)
+fmt.Println(resp.Reason, resp.ImgReason, resp.TextReason)
+fmt.Println(resp.Usage)
+```
+
+`TextDict` is required, and at least one of `URI` and `ImgBase64` must be provided. If both image inputs are provided, the downstream service prioritizes `ImgBase64`. Optional fields use downstream defaults when omitted. The downstream service may return HTTP 200 for business validation failures; check `resp.OK`.
+
+| Field | Type | Required | Description |
+|------|------|------|------|
+| `TextDict` | `map[string]any` | Yes | Structured copy, including nested objects and image URLs |
+| `ImgBase64` | `string` | Conditional | Main image base64 without a data URL prefix |
+| `URI` | `string` | Conditional | Public image URL or internal storage URI |
+| `BusinessType` | `string` | No | Image small-model business type; downstream default is `v1` |
+| `DetectedAge` | `int` | No | Known age; downstream default is `0` |
+| `HashComparison` | `int` | No | Whether to enable hash comparison; downstream default is `0` |
+| `Canary` | `string` | No | Canary group; downstream default is `A` |
+| `Mode` | `string` | No | Detection mode; downstream default is `mixed` |
+| `OCR` | `int` | No | Whether to enable OCR; downstream default is `0` |
+
 ## Face Scan
 
 The face scan API maps to `POST /v1/face/scan` and is used for face detection in images or videos. The gateway forwards requests to the upstream `/cloud/face/scan` endpoint.
