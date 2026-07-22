@@ -272,14 +272,14 @@ if err != nil {
     log.Fatal(err)
 }
 fmt.Println(resp.OK, resp.Level, resp.Label)
-fmt.Println(resp.Reason, resp.Usage)
+fmt.Println(resp.ReqID, resp.Reason, resp.Usage)
 ```
 
-`TextContentScanRequest` contains required `Text` plus optional `Canary` and `Scene`. `TextContentScanResponse` contains `OK`, `Level`, `Label`, `Reason`, `Usage`, and unmodeled fields in `Extra`.
+`TextContentScanRequest` contains required `Text` plus optional `Canary` and `Scene`. `TextContentScanResponse` contains `OK`, `ReqID`, `Level`, `Label`, `Reason`, `Usage`, and unmodeled fields in `Extra`. Log `ReqID` for downstream request tracing.
 
 ### Visual Structured Text Fusion Scan
 
-Use `client.Modal.ScanVisualStructuredTextFusion` for `POST /v1/visual/structured/text/fusion/scan`. It requires `TextDict` plus `URI` or `ImgBase64` and returns image/text risk details with gateway usage.
+Use `client.Modal.ScanVisualStructuredTextFusion` for `POST /v1/visual/structured/text/fusion/scan`. It requires `TextDict` plus `URI` or `ImgBase64` and returns image/text risk details, downstream `ReqID` for request tracing, and gateway usage.
 
 ### Face Scan
 
