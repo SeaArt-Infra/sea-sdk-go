@@ -396,6 +396,8 @@ type TextContentScanRequest struct {
 type TextContentScanResponse struct {
 	// OK reports whether the scan service completed the business request successfully.
 	OK bool `json:"ok"`
+	// ReqID is the downstream request ID used for tracing.
+	ReqID string `json:"req_id,omitempty"`
 	// Level is the risk level, usually 0-6. Higher values indicate higher risk.
 	Level int `json:"level"`
 	// Label is the English risk category label.
@@ -420,6 +422,7 @@ func (r *TextContentScanResponse) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	delete(extra, "ok")
+	delete(extra, "req_id")
 	delete(extra, "level")
 	delete(extra, "label")
 	delete(extra, "reason")
@@ -463,6 +466,7 @@ type VisualStructuredTextFusionScanResponse struct {
 	TextReason  string         `json:"text_reason,omitempty"`
 	IssueSource string         `json:"issue_source,omitempty"`
 	RiskKeys    []string       `json:"risk_keys,omitempty"`
+	ReqID       string         `json:"req_id,omitempty"`
 	Msg         string         `json:"msg,omitempty"`
 	Usage       *Usage         `json:"usage,omitempty"`
 	Extra       map[string]any `json:"-"`
@@ -486,6 +490,7 @@ func (r *VisualStructuredTextFusionScanResponse) UnmarshalJSON(data []byte) erro
 	delete(extra, "text_reason")
 	delete(extra, "issue_source")
 	delete(extra, "risk_keys")
+	delete(extra, "req_id")
 	delete(extra, "msg")
 	delete(extra, "usage")
 

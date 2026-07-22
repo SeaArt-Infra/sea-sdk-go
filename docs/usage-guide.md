@@ -344,11 +344,11 @@ if err != nil {
     log.Fatal(err)
 }
 fmt.Println(resp.OK, resp.Level, resp.Label)
-fmt.Println(resp.Reason)
+fmt.Println(resp.ReqID, resp.Reason)
 fmt.Println(resp.Usage)
 ```
 
-`TextContentScanRequest` contains required `Text` plus optional `Canary` and `Scene`. `TextContentScanResponse` contains `OK`, `Level`, `Label`, `Reason`, `Usage`, and unmodeled fields in `Extra`.
+`TextContentScanRequest` contains required `Text` plus optional `Canary` and `Scene`. `TextContentScanResponse` contains `OK`, `ReqID`, `Level`, `Label`, `Reason`, `Usage`, and unmodeled fields in `Extra`. Log `ReqID` for downstream request tracing.
 
 ## Visual Structured Text Fusion Scan
 
@@ -372,7 +372,7 @@ if err != nil {
     log.Fatal(err)
 }
 fmt.Println(resp.OK, resp.NSFWLevel, resp.IssueSource, resp.RiskKeys)
-fmt.Println(resp.Reason, resp.ImgReason, resp.TextReason)
+fmt.Println(resp.ReqID, resp.Reason, resp.ImgReason, resp.TextReason)
 fmt.Println(resp.Usage)
 ```
 
@@ -389,6 +389,22 @@ fmt.Println(resp.Usage)
 | `Canary` | `string` | No | Canary group; downstream default is `A` |
 | `Mode` | `string` | No | Detection mode; downstream default is `mixed` |
 | `OCR` | `int` | No | Whether to enable OCR; downstream default is `0` |
+
+**Response fields**
+
+| Field | Type | Description |
+|------|------|------|
+| `OK` | `bool` | Whether the downstream scan completed successfully |
+| `NSFWLevel` | `int` | Highest risk level across the main image, image/text model, and linked images |
+| `Reason` | `string` | Combined judgment reason or business validation error |
+| `ImgReason` | `string` | Image-side risk reason |
+| `TextReason` | `string` | Text-side risk reason |
+| `IssueSource` | `string` | Risk source: `img`, `text`, `both`, or `none` |
+| `RiskKeys` | `[]string` | `TextDict` fields that contain risk |
+| `ReqID` | `string` | Downstream request ID for tracing, including business validation failures |
+| `Msg` | `string` | Downstream service error message |
+| `Usage` | `*Usage` | Gateway-injected billing metadata |
+| `Extra` | `map[string]any` | Upstream fields not modeled by the SDK |
 
 ## Face Scan
 

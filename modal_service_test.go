@@ -710,12 +710,12 @@ func TestModalScanTextContent_PostsTextContentScanRequest(t *testing.T) {
 		}
 
 		writeJSON(w, 200, map[string]any{
-			"ok":         true,
-			"level":      5,
-			"label":      "pornography",
-			"reason":     "Explicit sexual description",
-			"usage":      map[string]any{"cost": "0.001"},
-			"request_id": "content-text-risk-1",
+			"ok":     true,
+			"req_id": "content-text-risk-1",
+			"level":  5,
+			"label":  "pornography",
+			"reason": "Explicit sexual description",
+			"usage":  map[string]any{"cost": "0.001"},
 		})
 	})
 
@@ -730,10 +730,13 @@ func TestModalScanTextContent_PostsTextContentScanRequest(t *testing.T) {
 	if !resp.OK || resp.Level != 5 || resp.Label != "pornography" || resp.Reason != "Explicit sexual description" {
 		t.Fatalf("unexpected text content scan response: %+v", resp)
 	}
+	if resp.ReqID != "content-text-risk-1" {
+		t.Fatalf("unexpected req_id: %q", resp.ReqID)
+	}
 	if resp.Usage == nil || resp.Usage.Cost.String() != "0.001" {
 		t.Fatalf("unexpected usage: %+v", resp.Usage)
 	}
-	if resp.Extra["request_id"] != "content-text-risk-1" {
+	if _, ok := resp.Extra["req_id"]; ok {
 		t.Fatalf("unexpected extra fields: %+v", resp.Extra)
 	}
 }
@@ -777,7 +780,7 @@ func TestModalScanVisualStructuredTextFusion_PostsRequest(t *testing.T) {
 			"ok": true, "nsfw_level": 2, "reason": "detected risk",
 			"img_reason": "adult content", "text_reason": "inappropriate words",
 			"issue_source": "both", "risk_keys": []string{"description", "greeting"},
-			"usage": map[string]any{"cost": "0.001"}, "request_id": "fusion-1",
+			"usage": map[string]any{"cost": "0.001"}, "req_id": "fusion-1",
 		})
 	})
 
@@ -797,8 +800,14 @@ func TestModalScanVisualStructuredTextFusion_PostsRequest(t *testing.T) {
 	if !resp.OK || resp.NSFWLevel != 2 || resp.IssueSource != "both" {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
-	if resp.Usage == nil || resp.Usage.Cost.String() != "0.001" || resp.Extra["request_id"] != "fusion-1" {
+	if resp.ReqID != "fusion-1" {
+		t.Fatalf("unexpected req_id: %q", resp.ReqID)
+	}
+	if resp.Usage == nil || resp.Usage.Cost.String() != "0.001" {
 		t.Fatalf("unexpected response metadata: %+v", resp)
+	}
+	if _, ok := resp.Extra["req_id"]; ok {
+		t.Fatalf("unexpected extra fields: %+v", resp.Extra)
 	}
 }
 
