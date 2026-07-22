@@ -83,6 +83,12 @@ type TextScanAreaType = mmtypes.TextScanAreaType
 // TextScanWay selects the sensitive-word checking strategy.
 type TextScanWay = mmtypes.TextScanWay
 
+// VisualStructuredTextFusionScanRequest is the request body for POST /v1/visual/structured/text/fusion/scan.
+type VisualStructuredTextFusionScanRequest = mmtypes.VisualStructuredTextFusionScanRequest
+
+// VisualStructuredTextFusionScanResponse is the parsed response returned by POST /v1/visual/structured/text/fusion/scan.
+type VisualStructuredTextFusionScanResponse = mmtypes.VisualStructuredTextFusionScanResponse
+
 // FaceScanRequest is the request body for POST /v1/face/scan.
 type FaceScanRequest = mmtypes.FaceScanRequest
 

@@ -277,6 +277,10 @@ fmt.Println(resp.Reason, resp.Usage)
 
 `TextContentScanRequest` contains required `Text` plus optional `Canary` and `Scene`. `TextContentScanResponse` contains `OK`, `Level`, `Label`, `Reason`, `Usage`, and unmodeled fields in `Extra`.
 
+### Visual Structured Text Fusion Scan
+
+Use `client.Modal.ScanVisualStructuredTextFusion` for `POST /v1/visual/structured/text/fusion/scan`. It requires `TextDict` plus `URI` or `ImgBase64` and returns image/text risk details with gateway usage.
+
 ### Face Scan
 
 Use `client.Modal.ScanFace` to call `ModelBaseURL + /v1/face/scan`. The gateway forwards the request to upstream `/cloud/face/scan`.

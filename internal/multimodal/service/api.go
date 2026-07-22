@@ -29,6 +29,8 @@ const (
 	PathTextContentScan = "/v1/text/content/scan"
 	// PathAudioScan is the audio moderation scan endpoint.
 	PathAudioScan = "/v1/audio/scan"
+	// PathVisualStructuredTextFusionScan is the digital-human structured text and image scan endpoint.
+	PathVisualStructuredTextFusionScan = "/v1/visual/structured/text/fusion/scan"
 )
 
 func CreateTask(client *transport.Client, ctx context.Context, body any, headers http.Header) (*mmtypes.GenerationResponse, error) {
@@ -213,6 +215,30 @@ func ScanTextContent(client *transport.Client, ctx context.Context, req mmtypes.
 	}
 
 	var resp mmtypes.TextContentScanResponse
+	if err := decode(payload, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ScanVisualStructuredTextFusion sends a digital-human structured text and image scan request.
+func ScanVisualStructuredTextFusion(client *transport.Client, ctx context.Context, req mmtypes.VisualStructuredTextFusionScanRequest, headers http.Header) (*mmtypes.VisualStructuredTextFusionScanResponse, error) {
+	if len(req.TextDict) == 0 {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "text_dict is required"}
+	}
+	if strings.TrimSpace(req.URI) == "" && strings.TrimSpace(req.ImgBase64) == "" {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "uri or img_base64 is required"}
+	}
+
+	status, payload, err := client.Request(ctx, http.MethodPost, PathVisualStructuredTextFusionScan, req, headers)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, httpError(status, payload)
+	}
+
+	var resp mmtypes.VisualStructuredTextFusionScanResponse
 	if err := decode(payload, &resp); err != nil {
 		return nil, err
 	}
