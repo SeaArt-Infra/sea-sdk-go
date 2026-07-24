@@ -1,0 +1,4 @@
+interface:
+  display_name: "SeaArt Go SDK"
+  short_description: "Build SeaArt AI gateway integrations in Go"
+  default_prompt: "Use $seaart-sdk-go to implement a SeaArt Go SDK integration."
