@@ -7,6 +7,12 @@ description: Build and troubleshoot SeaArt AI gateway integrations with the sea-
 
 Use `github.com/SeaArt-Infra/sea-sdk-go` to call the SeaArt unified gateway from Go 1.22+. Import it as `sa`. The SDK is synchronous except for its streaming channels and uses only the standard library.
 
+## Install
+
+```bash
+go get github.com/SeaArt-Infra/sea-sdk-go
+```
+
 ## Workflow
 
 1. Create one `sa.Client` with `sa.New` and reuse it across requests.
