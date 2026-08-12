@@ -1,6 +1,9 @@
 package sa
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 // RequestOption configures a single SDK request.
 type RequestOption interface {
@@ -54,4 +57,34 @@ func WithHeaders(headers http.Header) RequestOption {
 			}
 		}
 	})
+}
+
+func moveModelToHeader(body JSONMap, headers http.Header) (JSONMap, http.Header, error) {
+	requestBody := make(JSONMap, len(body))
+	for key, value := range body {
+		requestBody[key] = value
+	}
+	requestHeaders := headers.Clone()
+	if requestHeaders == nil {
+		requestHeaders = make(http.Header)
+	}
+
+	modelValue, ok := requestBody["model"]
+	if !ok {
+		return requestBody, requestHeaders, nil
+	}
+	delete(requestBody, "model")
+
+	model, ok := modelValue.(string)
+	if !ok || strings.TrimSpace(model) == "" {
+		return nil, nil, &Error{Kind: ErrGeneral, Message: "model must be a non-empty string"}
+	}
+	for key := range requestHeaders {
+		if strings.EqualFold(key, "X-Model") {
+			return nil, nil, &Error{Kind: ErrGeneral, Message: "model and X-Model cannot both be set"}
+		}
+	}
+
+	requestHeaders.Set("X-Model", model)
+	return requestBody, requestHeaders, nil
 }

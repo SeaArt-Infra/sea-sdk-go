@@ -56,6 +56,8 @@ client, err := sa.New(&sa.ClientConfig{
 **Default endpoint:** `https://gateway.example.com`
 **Authentication:** `Authorization: Bearer {apiKey}`
 
+Keep the selected model in the SDK payload's top-level `model` field. The SDK sends it as the `X-Model` header and removes it from the serialized JSON body. Do not pass `X-Model` with `sa.WithHeader(...)` when the payload already contains `model`.
+
 ---
 
 ## Modal API (Multimodal Tasks)

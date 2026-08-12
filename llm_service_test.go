@@ -50,8 +50,11 @@ func TestLLMChatCompletions(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if body["model"] != "gpt-4o-mini" {
-			t.Fatalf("unexpected model: %v", body["model"])
+		if got := r.Header.Get("X-Model"); got != "gpt-4o-mini" {
+			t.Fatalf("unexpected model header: %s", got)
+		}
+		if _, ok := body["model"]; ok {
+			t.Fatalf("model must not be in body: %v", body["model"])
 		}
 		if body["reasoning_effort"] != "low" {
 			t.Fatalf("missing extra field: %v", body["reasoning_effort"])
@@ -73,14 +76,18 @@ func TestLLMChatCompletions(t *testing.T) {
 		})
 	})
 
-	raw, err := client.LLM.ChatCompletions(context.Background(), sa.JSONMap{
+	payload := sa.JSONMap{
 		"model":            "gpt-4o-mini",
 		"messages":         []sa.JSONMap{{"role": "user", "content": "hi"}},
 		"max_tokens":       16,
 		"reasoning_effort": "low",
-	})
+	}
+	raw, err := client.LLM.ChatCompletions(context.Background(), payload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if payload["model"] != "gpt-4o-mini" {
+		t.Fatalf("payload model was modified: %v", payload["model"])
 	}
 	resp, err := sa.Decode[sa.ChatCompletionResponse](raw)
 	if err != nil {
@@ -99,6 +106,12 @@ func TestLLMMessages(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if got := r.Header.Get("X-Model"); got != "claude-3-5-sonnet" {
+			t.Fatalf("unexpected model header: %s", got)
+		}
+		if _, ok := body["model"]; ok {
+			t.Fatalf("model must not be in body: %v", body["model"])
+		}
 		if body["max_tokens"] != float64(32) {
 			t.Fatalf("unexpected max_tokens: %v", body["max_tokens"])
 		}
@@ -138,6 +151,12 @@ func TestLLMResponses(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if got := r.Header.Get("X-Model"); got != "gpt-4.1-mini" {
+			t.Fatalf("unexpected model header: %s", got)
+		}
+		if _, ok := body["model"]; ok {
+			t.Fatalf("model must not be in body: %v", body["model"])
+		}
 		if body["input"] != "hello" {
 			t.Fatalf("unexpected input: %v", body["input"])
 		}
@@ -185,6 +204,12 @@ func TestLLMRerank(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if got := r.Header.Get("X-Model"); got != "qwen3-rerank" {
+			t.Fatalf("unexpected model header: %s", got)
+		}
+		if _, ok := body["model"]; ok {
+			t.Fatalf("model must not be in body: %v", body["model"])
+		}
 		if body["query"] != "mountain lake" {
 			t.Fatalf("unexpected query: %v", body["query"])
 		}
@@ -233,8 +258,11 @@ func TestLLMEmbeddings(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if body["model"] != "text-embedding-3-small" {
-			t.Fatalf("unexpected model: %v", body["model"])
+		if got := r.Header.Get("X-Model"); got != "text-embedding-3-small" {
+			t.Fatalf("unexpected model header: %s", got)
+		}
+		if _, ok := body["model"]; ok {
+			t.Fatalf("model must not be in body: %v", body["model"])
 		}
 
 		writeJSON(w, 200, sa.EmbeddingsResponse{
@@ -459,6 +487,12 @@ func TestLLMChatCompletionsStream(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if got := r.Header.Get("X-Model"); got != "gpt-4o-mini" {
+			t.Fatalf("unexpected model header: %s", got)
+		}
+		if _, ok := body["model"]; ok {
+			t.Fatalf("model must not be in body: %v", body["model"])
+		}
 		if body["stream"] != true {
 			t.Fatalf("expected stream=true, got %v", body["stream"])
 		}
@@ -509,6 +543,21 @@ func TestLLMChatCompletionsStream(t *testing.T) {
 	}
 	if !done.Done {
 		t.Fatalf("expected done event, got %+v", done)
+	}
+}
+
+func TestLLMRejectsConflictingModelAndHeader(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("request should not be sent")
+	})
+
+	_, err := client.LLM.ChatCompletions(
+		context.Background(),
+		sa.JSONMap{"model": "gpt-4o-mini", "messages": []sa.JSONMap{}},
+		sa.WithHeader("X-Model", "another-model"),
+	)
+	if err == nil || !strings.Contains(err.Error(), "model and X-Model cannot both be set") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
