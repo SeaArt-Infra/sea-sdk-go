@@ -20,9 +20,12 @@ func TestMediaCreate_SubmitsRawBody(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 
+		if got := r.Header.Get("X-Model"); got != "alibaba_wanx26_i2v_flash" {
+			t.Fatalf("unexpected model header: %s", got)
+		}
 		body := extractBody(t, r)
-		if body["model"] != "alibaba_wanx26_i2v_flash" {
-			t.Fatalf("unexpected model: %v", body["model"])
+		if _, ok := body["model"]; ok {
+			t.Fatalf("model must not be in body: %v", body["model"])
 		}
 		if body["moderation"] != true {
 			t.Fatalf("unexpected moderation: %v", body["moderation"])
@@ -89,12 +92,15 @@ func TestModalPrecharge_ReturnsBillingPreview(t *testing.T) {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 
+		if got := r.Header.Get("X-Model"); got != "volces_seedream_4_5" {
+			t.Fatalf("unexpected model header: %s", got)
+		}
 		body := extractBody(t, r)
 		if body["id"] != "d88pmute87128c73e9r0d0" {
 			t.Fatalf("unexpected id: %v", body["id"])
 		}
-		if body["model"] != "volces_seedream_4_5" {
-			t.Fatalf("unexpected model: %v", body["model"])
+		if _, ok := body["model"]; ok {
+			t.Fatalf("model must not be in body: %v", body["model"])
 		}
 		if body["moderation"] != false {
 			t.Fatalf("unexpected moderation: %v", body["moderation"])

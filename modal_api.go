@@ -10,7 +10,11 @@ import (
 )
 
 func (m *ModalService) Create(ctx context.Context, body JSONMap, opts ...RequestOption) (*Task, error) {
-	resp, err := mmservice.CreateTask(m.client, ctx, body, buildRequestOptions(opts).headers)
+	requestBody, headers, err := moveModelToHeader(body, buildRequestOptions(opts).headers)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := mmservice.CreateTask(m.client, ctx, requestBody, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +30,11 @@ func (m *ModalService) Create(ctx context.Context, body JSONMap, opts ...Request
 // Precharge queries the billing preview via POST /v1/generation/precharge.
 // The request body shape is the same as Create.
 func (m *ModalService) Precharge(ctx context.Context, body JSONMap, opts ...RequestOption) (*PrechargeResponse, error) {
-	return mmservice.Precharge(m.client, ctx, body, buildRequestOptions(opts).headers)
+	requestBody, headers, err := moveModelToHeader(body, buildRequestOptions(opts).headers)
+	if err != nil {
+		return nil, err
+	}
+	return mmservice.Precharge(m.client, ctx, requestBody, headers)
 }
 
 // ListModels searches multimodal model skills via GET /v1/models/skill/search.
