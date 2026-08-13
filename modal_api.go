@@ -3,6 +3,7 @@ package sa
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	mmservice "github.com/SeaArt-Infra/sea-sdk-go/internal/multimodal/service"
 	mmtypes "github.com/SeaArt-Infra/sea-sdk-go/internal/multimodal/types"
@@ -35,6 +36,44 @@ func (m *ModalService) Precharge(ctx context.Context, body JSONMap, opts ...Requ
 		return nil, err
 	}
 	return mmservice.Precharge(m.client, ctx, requestBody, headers)
+}
+
+// CreateComfyUITask creates a ComfyUI quick-app task with the gateway-required request shape.
+func (m *ModalService) CreateComfyUITask(ctx context.Context, templateID string, inputs []ComfyUIInput, highMemory *bool, opts ...RequestOption) (*Task, error) {
+	if strings.TrimSpace(templateID) == "" {
+		return nil, &Error{Kind: ErrGeneral, Message: "template_id is required"}
+	}
+	if len(inputs) == 0 {
+		return nil, &Error{Kind: ErrGeneral, Message: "inputs is required"}
+	}
+	for _, input := range inputs {
+		if strings.TrimSpace(input.Field) == "" {
+			return nil, &Error{Kind: ErrGeneral, Message: "each ComfyUI input requires field"}
+		}
+	}
+	requestBody := JSONMap{"model": "comfyui", "input": []map[string]any{{
+		"params": map[string]any{
+			"template_id": templateID,
+			"inputs":      inputs,
+		},
+	}}}
+	if highMemory != nil {
+		requestBody["input"].([]map[string]any)[0]["params"].(map[string]any)["high_memory"] = *highMemory
+	}
+	requestBody, headers, err := moveModelToHeader(requestBody, buildRequestOptions(opts).headers)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := mmservice.CreateTask(m.client, ctx, requestBody, headers)
+	if err != nil {
+		return nil, err
+	}
+	return &Task{ID: resp.ID, Status: resp.Status, Model: resp.Model, Error: resp.Error, client: m.client}, nil
+}
+
+// ListComfyUITemplates returns parameter specifications for the supplied template IDs.
+func (m *ModalService) ListComfyUITemplates(ctx context.Context, templateIDs []string, opts ...RequestOption) (*ComfyUITemplateSpecsResponse, error) {
+	return mmservice.ListComfyUITemplates(m.client, ctx, templateIDs, buildRequestOptions(opts).headers)
 }
 
 // ListModels searches multimodal model skills via GET /v1/models/skill/search.

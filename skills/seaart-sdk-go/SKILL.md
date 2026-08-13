@@ -1,6 +1,6 @@
 ---
 name: seaart-sdk-go
-description: Build and troubleshoot SeaArt AI gateway integrations with the sea-sdk-go client. Use when generating images or videos, searching model skills, estimating multimodal task cost, calling vendor-native passthrough APIs, running media or text safety scans, or using OpenAI- or Anthropic-compatible LLM, streaming, embedding, or rerank APIs from Go.
+description: Build and troubleshoot SeaArt AI gateway integrations with the sea-sdk-go client. Use when generating images or videos, calling ComfyUI quick-app templates, searching model skills, estimating multimodal task cost, calling vendor-native passthrough APIs, running media or text safety scans, or using OpenAI- or Anthropic-compatible LLM, streaming, embedding, or rerank APIs from Go.
 ---
 
 # SeaArt Go SDK
@@ -90,6 +90,22 @@ for _, output := range task.Output {
 ```
 
 Use `client.Modal.Precharge(ctx, body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `GetModelSkill`.
+
+## ComfyUI Quick Apps
+
+Use `ListComfyUITemplates(ctx, templateIDs)` to retrieve parameters for the supplied template IDs, then call `CreateComfyUITask` and poll with `task.Wait`.
+
+```go
+highMemory := true
+task, err := client.Modal.CreateComfyUITask(ctx, "d32kq8le878c73876j5g", []sa.ComfyUIInput{
+    {Field: "image", Value: "https://image.cdn2.seaart.me/upload/input.webp"},
+    {Field: "select", Value: 1},
+}, &highMemory)
+if err != nil { log.Fatal(err) }
+task, err = task.Wait(ctx, sa.WithPollInterval(3*time.Second), sa.WithPollTimeout(5*time.Minute))
+if err != nil { log.Fatal(err) }
+fmt.Println(task.URLs())
+```
 
 ## LLM And Streaming APIs
 

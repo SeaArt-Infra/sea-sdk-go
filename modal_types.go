@@ -98,6 +98,11 @@ type FaceScanResponse = mmtypes.FaceScanResponse
 type ModalModelSearchParams = mmtypes.ModelSearchParams
 type ModalModelSearchResponse = mmtypes.ModelSearchResponse
 type ModalModelSearchHit = mmtypes.ModelSearchHit
+type ComfyUIInput = mmtypes.ComfyUIInput
+type ComfyUITemplateInput = mmtypes.ComfyUITemplateInput
+type ComfyUITemplateOutput = mmtypes.ComfyUITemplateOutput
+type ComfyUITemplate = mmtypes.ComfyUITemplate
+type ComfyUITemplateSpecsResponse = mmtypes.ComfyUITemplateSpecsResponse
 type PrechargeResponse = mmtypes.PrechargeResponse
 type PrechargeData = mmtypes.PrechargeData
 

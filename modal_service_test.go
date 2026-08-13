@@ -83,6 +83,52 @@ func TestMediaCreate_SubmitsRawBody(t *testing.T) {
 	}
 }
 
+func TestModalCreateComfyUITaskAndListTemplateSpecs(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/template/specs" {
+			if r.Method != http.MethodPost {
+				t.Fatalf("unexpected template method: %s", r.Method)
+			}
+			body := extractBody(t, r)
+			if body["type"] != "comfyui" {
+				t.Fatalf("unexpected template type: %v", body["type"])
+			}
+			writeJSON(w, 200, map[string]any{
+				"type": "comfyui",
+				"templates": []any{map[string]any{
+					"template_id": "template-1",
+					"inputs":      []any{map[string]any{"field": "prompt", "required": true, "constraints": map[string]any{"default": "hello"}}},
+					"outputs":     []any{map[string]any{"node_id": "3", "node_type": "SaveImage"}},
+				}},
+			})
+			return
+		}
+		if r.URL.Path != "/v1/generation" || r.Header.Get("X-Model") != "comfyui" {
+			t.Fatalf("unexpected generation request: %s model=%s", r.URL.Path, r.Header.Get("X-Model"))
+		}
+		body := extractBody(t, r)
+		if _, ok := body["model"]; ok {
+			t.Fatal("model must not be in body")
+		}
+		input := body["input"].([]any)
+		params := input[0].(map[string]any)["params"].(map[string]any)
+		if params["template_id"] != "template-1" || params["high_memory"] != true {
+			t.Fatalf("unexpected params: %v", params)
+		}
+		writeJSON(w, 200, map[string]any{"id": "task-comfy", "status": "in_progress", "model": "comfyui"})
+	})
+
+	highMemory := true
+	task, err := client.Modal.CreateComfyUITask(context.Background(), "template-1", []sa.ComfyUIInput{{Field: "prompt", Value: "hello"}}, &highMemory)
+	if err != nil || task.ID != "task-comfy" {
+		t.Fatalf("unexpected task: task=%v err=%v", task, err)
+	}
+	specs, err := client.Modal.ListComfyUITemplates(context.Background(), []string{"template-1"})
+	if err != nil || len(specs.Templates) != 1 || specs.Templates[0].Inputs[0].Field != "prompt" {
+		t.Fatalf("unexpected specs: specs=%v err=%v", specs, err)
+	}
+}
+
 func TestModalPrecharge_ReturnsBillingPreview(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
