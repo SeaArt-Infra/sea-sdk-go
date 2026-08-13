@@ -180,6 +180,15 @@ if err != nil {
 }
 ```
 
+When a task fails, `Wait` returns `*sa.Error` with `Kind`, `TaskID`, the gateway error `Code`, and the complete gateway error `Message`.
+
+```go
+var sdkErr *sa.Error
+if errors.As(err, &sdkErr) {
+    fmt.Println(sdkErr.Kind, sdkErr.Code, sdkErr.Message, sdkErr.TaskID)
+}
+```
+
 ### ComfyUI Quick Apps
 
 Pass template IDs to `ListComfyUITemplates` to retrieve the corresponding quick-app parameters. `CreateComfyUITask` fixes the model to `comfyui`, routes it through `X-Model`, and builds the required request envelope.

@@ -156,11 +156,15 @@ type ComfyUITemplateSpecsResponse struct {
 type APIError struct {
 	Code         int    `json:"code,omitempty"`
 	ErrorMessage string `json:"error_message,omitempty"`
+	Message      string `json:"message,omitempty"`
 }
 
 func (e *APIError) Error() string {
 	if e.ErrorMessage != "" {
 		return e.ErrorMessage
+	}
+	if e.Message != "" {
+		return e.Message
 	}
 	return "unknown API error"
 }
