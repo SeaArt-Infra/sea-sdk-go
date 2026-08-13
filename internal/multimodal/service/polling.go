@@ -62,10 +62,18 @@ func WaitTask(client *transport.Client, ctx context.Context, taskID string, opts
 			return task, nil
 		case StatusFailed:
 			message := "task failed"
-			if task.Error != nil && task.Error.ErrorMessage != "" {
-				message = "task failed: " + task.Error.ErrorMessage
+			code := 0
+			if task.Error != nil {
+				detail := task.Error.ErrorMessage
+				if detail == "" {
+					detail = task.Error.Message
+				}
+				if detail != "" {
+					message = "task failed: " + detail
+				}
+				code = task.Error.Code
 			}
-			return nil, &shared.Error{Kind: shared.ErrTaskFailed, Message: message, TaskID: taskID}
+			return nil, &shared.Error{Kind: shared.ErrTaskFailed, Message: message, TaskID: taskID, Code: code}
 		}
 
 		select {
@@ -126,11 +134,19 @@ func PollTaskAsync(client *transport.Client, ctx context.Context, taskID string,
 				return
 			case StatusFailed:
 				message := "task failed"
-				if task.Error != nil && task.Error.ErrorMessage != "" {
-					message = "task failed: " + task.Error.ErrorMessage
+				code := 0
+				if task.Error != nil {
+					detail := task.Error.ErrorMessage
+					if detail == "" {
+						detail = task.Error.Message
+					}
+					if detail != "" {
+						message = "task failed: " + detail
+					}
+					code = task.Error.Code
 				}
 				ch <- mmtypes.TaskEvent{
-					Err: &shared.Error{Kind: shared.ErrTaskFailed, Message: message, TaskID: taskID},
+					Err: &shared.Error{Kind: shared.ErrTaskFailed, Message: message, TaskID: taskID, Code: code},
 				}
 				return
 			}

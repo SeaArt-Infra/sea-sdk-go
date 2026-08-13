@@ -18,6 +18,7 @@ type Error struct {
 	Message string
 	Status  int
 	TaskID  string
+	Code    int
 }
 
 func (e *Error) Error() string {

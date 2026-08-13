@@ -3,6 +3,7 @@ package sa_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -1186,6 +1187,24 @@ func TestMediaWait_FailedTask(t *testing.T) {
 	}
 	if sdkErr.Kind != sa.ErrTaskFailed {
 		t.Fatalf("unexpected error kind: %s", sdkErr.Kind)
+	}
+}
+
+func TestMediaWait_FailedTaskPreservesErrorMessageAndCode(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{
+			"id": "task_fail_details", "status": "failed",
+			"error": map[string]any{"code": 110001, "message": "input image may contain sensitive information"},
+		})
+	})
+
+	_, err := client.Modal.Wait(context.Background(), "task_fail_details", sa.WithPollInterval(time.Millisecond), sa.WithPollTimeout(time.Second))
+	var sdkErr *sa.Error
+	if !errors.As(err, &sdkErr) {
+		t.Fatalf("expected SDK error, got %v", err)
+	}
+	if sdkErr.Code != 110001 || sdkErr.Message != "task failed: input image may contain sensitive information" {
+		t.Fatalf("unexpected error: %#v", sdkErr)
 	}
 }
 
