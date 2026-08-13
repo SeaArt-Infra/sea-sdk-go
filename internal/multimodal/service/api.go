@@ -19,6 +19,7 @@ const (
 	PathTask             = "/v1/generation/task/"
 	PathModelSkillSearch = "/v1/models/skill/search"
 	PathModelSkill       = "/v1/models/skill/"
+	PathTemplateSpecs    = "/v1/template/specs"
 	// PathImageScan is the content-safety scan endpoint used for images, GIFs, and videos.
 	PathImageScan = "/v1/image/scan"
 	// PathFaceScan is the face-detection scan endpoint used for images and videos.
@@ -32,6 +33,49 @@ const (
 	// PathVisualStructuredTextFusionScan is the digital-human structured text and image scan endpoint.
 	PathVisualStructuredTextFusionScan = "/v1/visual/structured/text/fusion/scan"
 )
+
+func CreateComfyUITask(client *transport.Client, ctx context.Context, templateID string, inputs []mmtypes.ComfyUIInput, highMemory *bool, headers http.Header) (*mmtypes.GenerationResponse, error) {
+	templateID = strings.TrimSpace(templateID)
+	if templateID == "" {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "template_id is required"}
+	}
+	if len(inputs) == 0 {
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "inputs is required"}
+	}
+	for _, input := range inputs {
+		if strings.TrimSpace(input.Field) == "" {
+			return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "each ComfyUI input requires field"}
+		}
+	}
+	params := map[string]any{"template_id": templateID, "inputs": inputs}
+	if highMemory != nil {
+		params["high_memory"] = *highMemory
+	}
+	body := map[string]any{
+		"model": "comfyui",
+		"input": []map[string]any{{"params": params}},
+	}
+	return CreateTask(client, ctx, body, headers)
+}
+
+func ListComfyUITemplates(client *transport.Client, ctx context.Context, templateIDs []string, headers http.Header) (*mmtypes.ComfyUITemplateSpecsResponse, error) {
+	body := map[string]any{"type": "comfyui"}
+	if templateIDs != nil {
+		body["template_ids"] = templateIDs
+	}
+	status, payload, err := client.Request(ctx, http.MethodPost, PathTemplateSpecs, body, headers)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, httpError(status, payload)
+	}
+	var resp mmtypes.ComfyUITemplateSpecsResponse
+	if err := decode(payload, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
 
 func CreateTask(client *transport.Client, ctx context.Context, body any, headers http.Header) (*mmtypes.GenerationResponse, error) {
 	status, payload, err := client.Request(ctx, http.MethodPost, PathGeneration, body, headers)

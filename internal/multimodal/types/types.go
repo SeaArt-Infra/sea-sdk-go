@@ -111,6 +111,48 @@ type TaskMetadata struct {
 	UploadAt    float64 `json:"upload_at,omitempty"`
 }
 
+// ComfyUIInput is one value supplied to a ComfyUI quick-app template field.
+type ComfyUIInput struct {
+	Field  string `json:"field"`
+	Value  any    `json:"value"`
+	NodeID string `json:"node_id,omitempty"`
+}
+
+// ComfyUITemplateInput describes one parameter returned for a ComfyUI template.
+type ComfyUITemplateInput struct {
+	Field              string         `json:"field"`
+	NodeID             string         `json:"node_id"`
+	NodeType           string         `json:"node_type"`
+	Type               string         `json:"type"`
+	Required           bool           `json:"required"`
+	Description        string         `json:"description"`
+	ParameterType      int            `json:"parameter_type"`
+	ParameterValueType int            `json:"parameter_value_type"`
+	Constraints        map[string]any `json:"constraints"`
+}
+
+// ComfyUITemplateOutput describes one output node returned for a ComfyUI template.
+type ComfyUITemplateOutput struct {
+	NodeID   string `json:"node_id"`
+	NodeType string `json:"node_type"`
+}
+
+// ComfyUITemplate contains metadata and parameter definitions for a quick-app template.
+type ComfyUITemplate struct {
+	TemplateID   string                  `json:"template_id"`
+	TemplateName string                  `json:"template_name"`
+	Description  string                  `json:"description"`
+	Version      string                  `json:"version"`
+	Inputs       []ComfyUITemplateInput  `json:"inputs"`
+	Outputs      []ComfyUITemplateOutput `json:"outputs"`
+}
+
+// ComfyUITemplateSpecsResponse is returned by POST /v1/template/specs.
+type ComfyUITemplateSpecsResponse struct {
+	Type      string            `json:"type"`
+	Templates []ComfyUITemplate `json:"templates"`
+}
+
 type APIError struct {
 	Code         int    `json:"code,omitempty"`
 	ErrorMessage string `json:"error_message,omitempty"`

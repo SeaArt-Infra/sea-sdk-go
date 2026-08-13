@@ -14,6 +14,7 @@ Features:
 | Service | Client Field | Capability |
 |------|-------------|------|
 | [Multimodal API](#multimodal-api) | `client.Modal` | Model listing, parameter details, generation tasks, precharge estimates, and vendor passthrough |
+| [ComfyUI Quick Apps](#comfyui-quick-apps) | `client.Modal.CreateComfyUITask(...)` | Query template parameters, create ComfyUI quick-app tasks, and poll results |
 | [Image/Video Safety Scan](#imagevideo-safety-scan) | `client.Modal.ScanImage(...)` | Detect content-safety risks in images, GIFs, or videos |
 | [Sensitive-Word Scan](#sensitive-word-scan) | `client.Modal.ScanText(...)` | Detect sensitive words and combination-rule risks in text |
 | [Text Content Safety Scan](#text-content-safety-scan) | `client.Modal.ScanTextContent(...)` | Review short text risk level and category label |
@@ -177,6 +178,24 @@ task, err = task.Wait(ctx, sa.WithPollInterval(5*time.Second))
 if err != nil {
     log.Fatal(err)
 }
+```
+
+### ComfyUI Quick Apps
+
+Pass template IDs to `ListComfyUITemplates` to retrieve the corresponding quick-app parameters. `CreateComfyUITask` fixes the model to `comfyui`, routes it through `X-Model`, and builds the required request envelope.
+
+```go
+specs, err := client.Modal.ListComfyUITemplates(ctx, []string{"d32kq8le878c73876j5g"})
+if err != nil { log.Fatal(err) }
+highMemory := true
+task, err := client.Modal.CreateComfyUITask(ctx, "d32kq8le878c73876j5g", []sa.ComfyUIInput{
+    {Field: "image", Value: "https://image.cdn2.seaart.me/upload/input.webp"},
+    {Field: "select", Value: 1},
+}, &highMemory)
+if err != nil { log.Fatal(err) }
+task, err = task.Wait(ctx, sa.WithPollInterval(3*time.Second), sa.WithPollTimeout(5*time.Minute))
+if err != nil { log.Fatal(err) }
+fmt.Println(task.URLs())
 ```
 
 ### Precharge Estimate
@@ -714,7 +733,7 @@ for event := range events {
 >
 ---
 name: seaart-sdk-go
-description: Build and troubleshoot SeaArt AI gateway integrations with the sea-sdk-go client. Use when generating images or videos, searching model skills, estimating multimodal task cost, calling vendor-native passthrough APIs, running media or text safety scans, or using OpenAI- or Anthropic-compatible LLM, streaming, embedding, or rerank APIs from Go.
+description: Build and troubleshoot SeaArt AI gateway integrations with the sea-sdk-go client. Use when generating images or videos, calling ComfyUI quick-app templates, searching model skills, estimating multimodal task cost, calling vendor-native passthrough APIs, running media or text safety scans, or using OpenAI- or Anthropic-compatible LLM, streaming, embedding, or rerank APIs from Go.
 ---
 
 # SeaArt Go SDK
@@ -804,6 +823,22 @@ for _, output := range task.Output {
 ```
 
 Use `client.Modal.Precharge(ctx, body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `GetModelSkill`.
+
+## ComfyUI Quick Apps
+
+Use `ListComfyUITemplates(ctx, templateIDs)` to retrieve parameters for the supplied template IDs, then call `CreateComfyUITask` and poll with `task.Wait`.
+
+```go
+highMemory := true
+task, err := client.Modal.CreateComfyUITask(ctx, "d32kq8le878c73876j5g", []sa.ComfyUIInput{
+    {Field: "image", Value: "https://image.cdn2.seaart.me/upload/input.webp"},
+    {Field: "select", Value: 1},
+}, &highMemory)
+if err != nil { log.Fatal(err) }
+task, err = task.Wait(ctx, sa.WithPollInterval(3*time.Second), sa.WithPollTimeout(5*time.Minute))
+if err != nil { log.Fatal(err) }
+fmt.Println(task.URLs())
+```
 
 ## LLM And Streaming APIs
 
