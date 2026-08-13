@@ -14,6 +14,7 @@ Features:
 | Service | Client Field | Capability |
 |------|-------------|------|
 | [Multimodal API](#multimodal-api) | `client.Modal` | Model listing, parameter details, generation tasks, precharge estimates, and vendor passthrough |
+| [ComfyUI Quick Apps](#comfyui-quick-apps) | `client.Modal.CreateComfyUITask(...)` | Query template parameters, create ComfyUI quick-app tasks, and poll results |
 | [Image/Video Safety Scan](#imagevideo-safety-scan) | `client.Modal.ScanImage(...)` | Detect content-safety risks in images, GIFs, or videos |
 | [Sensitive-Word Scan](#sensitive-word-scan) | `client.Modal.ScanText(...)` | Detect sensitive words and combination-rule risks in text |
 | [Text Content Safety Scan](#text-content-safety-scan) | `client.Modal.ScanTextContent(...)` | Review short text risk level and category label |
