@@ -1208,6 +1208,26 @@ func TestMediaWait_FailedTaskPreservesErrorMessageAndCode(t *testing.T) {
 	}
 }
 
+func TestMediaWait_FailedTaskAcceptsEmptyUsageCost(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{
+			"id":     "task_fail_empty_cost",
+			"status": "failed",
+			"error":  map[string]any{"code": 190000, "message": "download input audio failed"},
+			"usage":  map[string]any{"cost": ""},
+		})
+	})
+
+	_, err := client.Modal.Wait(context.Background(), "task_fail_empty_cost", sa.WithPollInterval(time.Millisecond), sa.WithPollTimeout(time.Second))
+	var sdkErr *sa.Error
+	if !errors.As(err, &sdkErr) {
+		t.Fatalf("expected SDK error, got %v", err)
+	}
+	if sdkErr.Kind != sa.ErrTaskFailed || sdkErr.Code != 190000 || sdkErr.Message != "task failed: download input audio failed" {
+		t.Fatalf("unexpected error: %#v", sdkErr)
+	}
+}
+
 func TestTaskBuilderBuildsGenericRequest(t *testing.T) {
 	body := sa.NewTask("alibaba_wanx26_i2v_flash").
 		Moderation(true).
