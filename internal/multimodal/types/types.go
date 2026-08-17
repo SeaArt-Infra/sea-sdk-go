@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"time"
 )
@@ -95,6 +96,42 @@ type Usage struct {
 	InputTokens    *int        `json:"input_tokens,omitempty"`
 	OutputTokens   *int        `json:"output_tokens,omitempty"`
 	TotalTokens    *int        `json:"total_tokens,omitempty"`
+}
+
+func (u *Usage) UnmarshalJSON(data []byte) error {
+	type usageAlias Usage
+
+	var decoded usageAlias
+	aux := struct {
+		Cost json.RawMessage `json:"cost"`
+		*usageAlias
+	}{
+		usageAlias: &decoded,
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	cost, err := decodeUsageCost(aux.Cost)
+	if err != nil {
+		return err
+	}
+	decoded.Cost = cost
+	*u = Usage(decoded)
+	return nil
+}
+
+func decodeUsageCost(data json.RawMessage) (json.Number, error) {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || bytes.Equal(data, []byte("null")) || bytes.Equal(data, []byte(`""`)) {
+		return "", nil
+	}
+
+	var cost json.Number
+	if err := json.Unmarshal(data, &cost); err != nil {
+		return "", err
+	}
+	return cost, nil
 }
 
 func (u *Usage) CostFloat64() float64 {
