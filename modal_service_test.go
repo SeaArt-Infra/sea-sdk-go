@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1225,6 +1226,37 @@ func TestMediaWait_FailedTaskAcceptsEmptyUsageCost(t *testing.T) {
 	}
 	if sdkErr.Kind != sa.ErrTaskFailed || sdkErr.Code != 190000 || sdkErr.Message != "task failed: download input audio failed" {
 		t.Fatalf("unexpected error: %#v", sdkErr)
+	}
+}
+
+func TestBillingQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/cost/billing" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.URL.Query().Get("environment"); got != "release" {
+			t.Fatalf("environment = %q", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("authorization = %q", got)
+		}
+		writeJSON(w, 200, map[string]any{"code": 0, "message": "ok", "data": map[string]any{
+			"team": "SeaComfyui", "environments": []string{"release"},
+			"summary": map[string]any{"total_requests": 3, "total_cost": "1.25", "currency": "USD"},
+			"items":   map[string]any{"items": []any{}, "total": 0, "page": 1, "page_size": 20, "total_pages": 0},
+		}})
+	}))
+	defer server.Close()
+	client, err := sa.New(&sa.ClientConfig{APIKey: "test-key", BillingBaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Billing.Query(context.Background(), sa.BillingQuery{Environment: "release"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Team != "SeaComfyui" || response.Summary.TotalCost != "1.25" {
+		t.Fatalf("response = %#v", response)
 	}
 }
 

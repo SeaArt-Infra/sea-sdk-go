@@ -14,6 +14,7 @@ const (
 	defaultModelBaseURL   = defaultBaseURL + "/model"
 	defaultLLMBaseURL     = defaultBaseURL + "/llm"
 	defaultPassthroughURL = defaultModelBaseURL
+	defaultBillingBaseURL = defaultBaseURL + "/monitor"
 	defaultTimeout        = 5 * time.Minute
 	sdkVersion            = "0.1.0"
 )
@@ -25,12 +26,14 @@ type Client struct {
 	modelBaseURL       string
 	llmBaseURL         string
 	passthroughBaseURL string
+	billingBaseURL     string
 	project            string
 	httpClient         *http.Client
 
 	Modal       *ModalService
 	LLM         *LLMService
 	Passthrough *PassthroughService
+	Billing     *BillingService
 }
 
 // ClientConfig configures a Client.
@@ -44,6 +47,7 @@ type ClientConfig struct {
 	ModelBaseURL       string
 	LLMBaseURL         string
 	PassthroughBaseURL string
+	BillingBaseURL     string
 	Project            string
 	HTTPClient         *http.Client
 	Timeout            time.Duration
@@ -54,6 +58,7 @@ type resolvedEndpoints struct {
 	model       string
 	llm         string
 	passthrough string
+	billing     string
 }
 
 // New creates a Client from an explicit ClientConfig.
@@ -90,12 +95,17 @@ func resolveEndpoints(cfg ClientConfig) (resolvedEndpoints, error) {
 	if err != nil {
 		return resolvedEndpoints{}, err
 	}
+	billing, err := resolveServiceURL(cfg.BillingBaseURL, cfg.BaseURL != "", root, "monitor", defaultBillingBaseURL)
+	if err != nil {
+		return resolvedEndpoints{}, err
+	}
 
 	return resolvedEndpoints{
 		root:        root,
 		model:       model,
 		llm:         llm,
 		passthrough: passthrough,
+		billing:     billing,
 	}, nil
 }
 
@@ -134,6 +144,7 @@ func newClient(cfg ClientConfig, endpoints resolvedEndpoints) *Client {
 		modelBaseURL:       endpoints.model,
 		llmBaseURL:         endpoints.llm,
 		passthroughBaseURL: endpoints.passthrough,
+		billingBaseURL:     endpoints.billing,
 		project:            cfg.Project,
 		httpClient:         httpClient,
 	}
@@ -165,6 +176,10 @@ func newClient(cfg ClientConfig, endpoints resolvedEndpoints) *Client {
 			HTTPClient: httpClient,
 		},
 	}
+	client.Billing = &BillingService{client: &transport.Client{
+		APIKey: client.apiKey, BaseURL: client.billingBaseURL, Project: client.project,
+		UserAgent: "sa-go/" + sdkVersion, HTTPClient: httpClient,
+	}}
 
 	return client
 }

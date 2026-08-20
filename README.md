@@ -22,6 +22,7 @@ Features:
 | [Face Scan](#face-scan) | `client.Modal.ScanFace(...)` | Detect face-related results in images or videos |
 | [Audio Scan](#audio-scan) | `client.Modal.ScanAudio(...)` | Detect audio content risks |
 | [LLM API](#llm-api) | `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank compatible APIs |
+| [Billing API](#billing-api) | `client.Billing` | Query the authenticated team's cost statement |
 
 ## Installation
 
@@ -44,7 +45,7 @@ if err != nil {
 }
 ```
 
-Configure the unified gateway address through `BaseURL`. The SDK uses it to call multimodal, LLM, and passthrough capabilities.
+Configure the unified gateway address through `BaseURL`. The SDK uses it to call multimodal, LLM, billing, and passthrough capabilities.
 
 ```go
 client, err := sa.New(&sa.ClientConfig{
@@ -758,7 +759,7 @@ go get github.com/SeaArt-Infra/sea-sdk-go
 ## Workflow
 
 1. Create one `sa.Client` with `sa.New` and reuse it across requests.
-2. Select `client.Modal` for generation, model skills, precharge, or safety scans; `client.LLM` for LLM APIs; and `client.Passthrough` for vendor-native paths.
+2. Select `client.Modal` for generation, model skills, precharge, or safety scans; `client.Billing` for team-scoped cost statements; `client.LLM` for LLM APIs; and `client.Passthrough` for vendor-native paths.
 3. For a multimodal model, retrieve `client.Modal.GetModelSkill` before building model-specific parameters.
 4. Poll generation tasks with `task.Wait`, checking both the returned task and error.
 5. Decode successful LLM responses or stream event data with `sa.Decode[T]`; inspect `*sa.Error` at the request boundary.
@@ -778,6 +779,29 @@ if err != nil {
 ```
 
 Passing `BaseURL` derives `/model` and `/llm` service URLs. Override `ModelBaseURL`, `LLMBaseURL`, or `PassthroughBaseURL` only when services use separate gateways. Do not expose API keys in source control or logs.
+
+## Billing API
+
+`client.Billing.Query` calls `GET /monitor/api/v1/cost/billing`. The gateway derives the team from the Bearer token and injects `X-User-ID`; callers do not pass a team identifier. By default the query covers `develop` and `release`. Set `Environment` to `develop` or `release` to select one environment.
+
+`Start` and `End` define the time range. They accept RFC3339 timestamps such as `2026-08-19T00:00:00Z`, UTC date-times without a zone, date-only values such as `2026-08-19`, or Unix seconds. The range is `[start, end)`. When `End` is date-only, that whole day is included; without either value, the server defaults to the previous seven days.
+
+```go
+statement, err := client.Billing.Query(ctx, sa.BillingQuery{
+    Start: "2026-08-19T00:00:00Z",
+    End: "2026-08-20T00:00:00Z",
+    Environment: "release",
+    Page: 1,
+    PageSize: 20,
+})
+if err != nil { log.Fatal(err) }
+fmt.Println(statement.Team, statement.Summary.TotalCost)
+for _, item := range statement.Items.Items {
+    fmt.Println(item.Provider, item.ModelGroup, item.TotalCost)
+}
+```
+
+Set `BillingBaseURL` only when the billing route is hosted separately; otherwise `BaseURL` derives it as `<BaseURL>/monitor`.
 
 Keep the selected model in the SDK payload's top-level `model` field. The SDK sends it as the `X-Model` header and removes it from the serialized JSON body. Do not pass `X-Model` with `sa.WithHeader(...)` when the payload already contains `model`.
 
@@ -832,6 +856,11 @@ for _, output := range task.Output {
 ```
 
 Use `client.Modal.Precharge(ctx, body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `GetModelSkill`.
+
+## Billing Queries
+
+Use `client.Billing.Query(ctx, sa.BillingQuery{...})` for the authenticated team's cost statement. The gateway derives the team from the Bearer token, so callers must not pass `team_alias`. The default environment scope is `develop` plus `release`; set `Environment` to one of those values to select a single environment. Use `Start`, `End`, `Provider`, `CredentialName`, `ModelGroup`, `Page`, and `PageSize` for supported filters.
+Use RFC3339 or date-only values for `Start`/`End`; the range is `[start, end)`, and omitted values default to the previous seven days.
 
 ## ComfyUI Quick Apps
 
