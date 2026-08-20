@@ -20,6 +20,9 @@ func TestNew_DefaultBaseURLs(t *testing.T) {
 	if client.passthroughBaseURL != defaultPassthroughURL {
 		t.Fatalf("unexpected passthroughBaseURL: %s", client.passthroughBaseURL)
 	}
+	if client.billingBaseURL != defaultBillingBaseURL {
+		t.Fatalf("unexpected billingBaseURL: %s", client.billingBaseURL)
+	}
 }
 
 func TestNew_DerivesServiceBaseURLsFromBaseURL(t *testing.T) {
@@ -43,6 +46,9 @@ func TestNew_DerivesServiceBaseURLsFromBaseURL(t *testing.T) {
 	if client.passthroughBaseURL != "https://gateway.example.com/model" {
 		t.Fatalf("unexpected passthroughBaseURL: %s", client.passthroughBaseURL)
 	}
+	if client.billingBaseURL != "https://gateway.example.com/monitor" {
+		t.Fatalf("unexpected billingBaseURL: %s", client.billingBaseURL)
+	}
 }
 
 func TestNew_ServiceBaseURLOverrides(t *testing.T) {
@@ -52,6 +58,7 @@ func TestNew_ServiceBaseURLOverrides(t *testing.T) {
 		ModelBaseURL:       "https://model.example.com",
 		LLMBaseURL:         "https://llm.example.com",
 		PassthroughBaseURL: "https://passthrough.example.com",
+		BillingBaseURL:     "https://billing.example.com",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -65,6 +72,9 @@ func TestNew_ServiceBaseURLOverrides(t *testing.T) {
 	}
 	if client.passthroughBaseURL != "https://passthrough.example.com" {
 		t.Fatalf("unexpected passthroughBaseURL: %s", client.passthroughBaseURL)
+	}
+	if client.billingBaseURL != "https://billing.example.com" {
+		t.Fatalf("unexpected billingBaseURL: %s", client.billingBaseURL)
 	}
 }
 
