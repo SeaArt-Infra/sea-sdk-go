@@ -18,6 +18,7 @@ Features:
 | [Image/Video Safety Scan](#imagevideo-safety-scan) | `client.Modal.ScanImage(...)` | Detect content-safety risks in images, GIFs, or videos |
 | [Sensitive-Word Scan](#sensitive-word-scan) | `client.Modal.ScanText(...)` | Detect sensitive words and combination-rule risks in text |
 | [Text Content Safety Scan](#text-content-safety-scan) | `client.Modal.ScanTextContent(...)` | Review short text risk level and category label |
+| [Character Quality Scan](#character-quality-scan) | `client.Modal.ScanCharacterQuality(...)` | Review character copy quality and safety |
 | [Visual Structured Text Fusion Scan](#visual-structured-text-fusion-scan) | `client.Modal.ScanVisualStructuredTextFusion(...)` | Scan digital-human cover images and structured copy together |
 | [Face Scan](#face-scan) | `client.Modal.ScanFace(...)` | Detect face-related results in images or videos |
 | [Audio Scan](#audio-scan) | `client.Modal.ScanAudio(...)` | Detect audio content risks |
@@ -522,6 +523,35 @@ fmt.Println(resp.Usage)
   }
 }
 ```
+
+## Character Quality Scan
+
+The character quality scan endpoint is `POST /v1/char/quality/scan`. It reviews character-copy quality and safety, returning a grade such as `S`, `A+`, `A`, `B`, or `C`, plus the safety result. The request body is a flat JSON object: use either the production-line A fields (`FirstMsg`, `Description`, `Scenario`, `ExampleDialogue`) or the production-line B fields (`OpeningLine`, `CharacterIntroduction`, `ScenarioSetting`, `DialogueExamples`, `PersonalitySetting`). All submitted values are strings.
+
+```go
+resp, err := client.Modal.ScanCharacterQuality(ctx, sa.CharacterQualityScanRequest{
+    Name:            "Xiaomei",
+    FirstMsg:        "Hello, I am Xiaomei.",
+    Description:     "A thoughtful friend who enjoys painting.",
+    Scenario:        "A cafe on a rainy day.",
+    ExampleDialogue: "A: Hello\nB: Welcome.",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(resp.OK, resp.Level, resp.SafetyTag.Tag)
+fmt.Println(resp.SafetyTag.Fields, resp.Usage.Cost)
+```
+
+| Request field | Production line | Description |
+|------|------|------|
+| `Name` | A / B | Character name |
+| `FirstMsg`, `Description`, `Scenario`, `ExampleDialogue` | A | Opening message, description, scenario, and dialogue example |
+| `OpeningLine`, `CharacterIntroduction`, `ScenarioSetting`, `DialogueExamples` | B | Opening message, description, scenario, and dialogue example |
+| `PersonalitySetting` | B | Optional personality setting |
+
+`SafetyTag.Tag` is normally `normal` when no safety rule matches. `SafetyTag.Fields` contains field-level matches using the original request field names and may be omitted or empty. `Usage.Cost` is the gateway-injected charge for the call. Unmodeled response fields remain available in `resp.Extra`.
 
 ## Visual Structured Text Fusion Scan
 

@@ -16,7 +16,7 @@ const (
 	StatusFailed     = "failed"
 	StatusInProgress = "in_progress"
 
-	pollNetworkRetryLimit = 3
+	pollRetryLimit = 3
 )
 
 func GenerateAndWait(client *transport.Client, ctx context.Context, req *mmtypes.GenerateRequest, opts ...mmtypes.PollOption) (*mmtypes.TaskResponse, error) {
@@ -30,14 +30,14 @@ func GenerateAndWait(client *transport.Client, ctx context.Context, req *mmtypes
 func WaitTask(client *transport.Client, ctx context.Context, taskID string, opts ...mmtypes.PollOption) (*mmtypes.TaskResponse, error) {
 	cfg := mmtypes.ApplyPollOptions(opts...)
 	deadline := time.Now().Add(cfg.Timeout)
-	networkErrors := 0
+	retries := 0
 
 	for time.Now().Before(deadline) {
 		task, err := GetTask(client, ctx, taskID, nil)
 		if err != nil {
 			sdkErr, ok := err.(*shared.Error)
-			if ok && sdkErr.Kind == shared.ErrNetwork && networkErrors < pollNetworkRetryLimit {
-				networkErrors++
+			if shouldRetryPollError(sdkErr, retries) {
+				retries++
 				select {
 				case <-ctx.Done():
 					return nil, &shared.Error{Kind: shared.ErrNetwork, Message: "context cancelled", TaskID: taskID}
@@ -50,7 +50,7 @@ func WaitTask(client *transport.Client, ctx context.Context, taskID string, opts
 			}
 			return nil, err
 		}
-		networkErrors = 0
+		retries = 0
 
 		status := strings.ToLower(task.Status)
 		if cfg.OnUpdate != nil {
@@ -98,14 +98,14 @@ func PollTaskAsync(client *transport.Client, ctx context.Context, taskID string,
 
 		cfg := mmtypes.ApplyPollOptions(opts...)
 		deadline := time.Now().Add(cfg.Timeout)
-		networkErrors := 0
+		retries := 0
 
 		for time.Now().Before(deadline) {
 			task, err := GetTask(client, ctx, taskID, nil)
 			if err != nil {
 				sdkErr, ok := err.(*shared.Error)
-				if ok && sdkErr.Kind == shared.ErrNetwork && networkErrors < pollNetworkRetryLimit {
-					networkErrors++
+				if shouldRetryPollError(sdkErr, retries) {
+					retries++
 					select {
 					case <-ctx.Done():
 						ch <- mmtypes.TaskEvent{Err: &shared.Error{Kind: shared.ErrNetwork, Message: "context cancelled", TaskID: taskID}}
@@ -120,7 +120,7 @@ func PollTaskAsync(client *transport.Client, ctx context.Context, taskID string,
 				ch <- mmtypes.TaskEvent{Err: err}
 				return
 			}
-			networkErrors = 0
+			retries = 0
 
 			event := mmtypes.TaskEvent{
 				Status:   strings.ToLower(task.Status),
@@ -171,4 +171,14 @@ func PollTaskAsync(client *transport.Client, ctx context.Context, taskID string,
 	}()
 
 	return ch
+}
+
+func shouldRetryPollError(err *shared.Error, retries int) bool {
+	if err == nil || retries >= pollRetryLimit {
+		return false
+	}
+	if err.Kind == shared.ErrNetwork {
+		return true
+	}
+	return err.Status == 502 || err.Status == 503 || err.Status == 504
 }

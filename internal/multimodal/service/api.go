@@ -28,6 +28,8 @@ const (
 	PathTextScan = "/v1/text/scan"
 	// PathTextContentScan is the content-safety scan endpoint used for short text.
 	PathTextContentScan = "/v1/text/content/scan"
+	// PathCharacterQualityScan evaluates character copy quality and safety.
+	PathCharacterQualityScan = "/v1/char/quality/scan"
 	// PathAudioScan is the audio moderation scan endpoint.
 	PathAudioScan = "/v1/audio/scan"
 	// PathVisualStructuredTextFusionScan is the digital-human structured text and image scan endpoint.
@@ -265,6 +267,23 @@ func ScanTextContent(client *transport.Client, ctx context.Context, req mmtypes.
 	return &resp, nil
 }
 
+// ScanCharacterQuality sends a character copy quality and safety review request.
+func ScanCharacterQuality(client *transport.Client, ctx context.Context, req mmtypes.CharacterQualityScanRequest, headers http.Header) (*mmtypes.CharacterQualityScanResponse, error) {
+	status, payload, err := client.Request(ctx, http.MethodPost, PathCharacterQualityScan, req, headers)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, httpError(status, payload)
+	}
+
+	var resp mmtypes.CharacterQualityScanResponse
+	if err := decode(payload, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 // ScanVisualStructuredTextFusion sends a digital-human structured text and image scan request.
 func ScanVisualStructuredTextFusion(client *transport.Client, ctx context.Context, req mmtypes.VisualStructuredTextFusionScanRequest, headers http.Header) (*mmtypes.VisualStructuredTextFusionScanResponse, error) {
 	if len(req.TextDict) == 0 {
@@ -377,8 +396,8 @@ func httpError(status int, payload []byte) error {
 	_ = json.Unmarshal(payload, &apiErr)
 
 	message := "HTTP error"
-	if apiErr.Error != nil && apiErr.Error.ErrorMessage != "" {
-		message = apiErr.Error.ErrorMessage
+	if apiErr.Error != nil && apiErr.Error.Error() != "unknown API error" {
+		message = apiErr.Error.Error()
 	} else {
 		message = http.StatusText(status)
 		if message == "" {

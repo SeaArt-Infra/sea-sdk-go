@@ -157,7 +157,7 @@ Use `client.LLM.Messages` / `MessagesStream` for Anthropic Messages and `Respons
 
 Use passthrough only for a vendor-native path such as `/kling/...`, `/vidu/...`, or `/google/...`; pass a relative path and preserve the returned status, headers, and raw body.
 
-Use the dedicated scan methods for image/video, face, audio, sensitive-word, short-text, or visual-and-structured-text checks. Image and face scans accept either `URI` or `ImgBase64`; video and audio scans require `URI`.
+Use the dedicated scan methods for image/video, face, audio, sensitive-word, short-text, character-copy quality, or visual-and-structured-text checks. Image and face scans accept either `URI` or `ImgBase64`; video and audio scans require `URI`. Character quality scans use `client.Modal.ScanCharacterQuality(...)` with a flat production-line A or B field set.
 
 ```go
 if _, err := client.Modal.ScanText(ctx, sa.TextScanRequest{Text: "Text to check"}); err != nil {
