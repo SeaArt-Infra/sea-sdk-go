@@ -806,6 +806,67 @@ func TestModalScanTextContent_RequiresText(t *testing.T) {
 	}
 }
 
+func TestModalScanCharacterQuality_PostsFlatBody(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/char/quality/scan" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("unexpected authorization: %q", got)
+		}
+
+		body := extractBody(t, r)
+		if body["name"] != "Xiaomei" || body["first_msg"] != "Hello." || body["description"] != "A thoughtful friend." {
+			t.Fatalf("unexpected production-line A fields: %#v", body)
+		}
+		if body["scenario"] != "A cafe on a rainy day." || body["example_dialogue"] != "A: Hello\nB: Welcome." {
+			t.Fatalf("unexpected production-line A content: %#v", body)
+		}
+		if _, ok := body["opening_line"]; ok {
+			t.Fatalf("empty production-line B fields must be omitted: %#v", body)
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok": true, "level": "A", "safety_tag": map[string]any{"tag": "normal"},
+			"usage": map[string]any{"cost": "0.001"}, "request_id": "character-quality-1",
+		})
+	})
+
+	resp, err := client.Modal.ScanCharacterQuality(context.Background(), sa.CharacterQualityScanRequest{
+		Name: "Xiaomei", FirstMsg: "Hello.", Description: "A thoughtful friend.",
+		Scenario: "A cafe on a rainy day.", ExampleDialogue: "A: Hello\nB: Welcome.",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.OK || resp.Level != "A" || resp.SafetyTag == nil || resp.SafetyTag.Tag != "normal" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	if resp.Usage == nil || resp.Usage.Cost.String() != "0.001" {
+		t.Fatalf("unexpected usage: %+v", resp.Usage)
+	}
+	if resp.Extra["request_id"] != "character-quality-1" {
+		t.Fatalf("unexpected extra fields: %#v", resp.Extra)
+	}
+}
+
+func TestModalScanCharacterQuality_PreservesGatewayErrorMessage(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": map[string]any{"message": "Invalid request body", "code": "BAD_REQUEST"},
+		})
+	})
+
+	_, err := client.Modal.ScanCharacterQuality(context.Background(), sa.CharacterQualityScanRequest{Name: "Xiaomei"})
+	var sdkErr *sa.Error
+	if !errors.As(err, &sdkErr) {
+		t.Fatalf("expected SDK error, got %v", err)
+	}
+	if sdkErr.Status != http.StatusBadRequest || sdkErr.Message != "Invalid request body" {
+		t.Fatalf("unexpected SDK error: %#v", sdkErr)
+	}
+}
+
 func TestModalScanVisualStructuredTextFusion_PostsRequest(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -1115,6 +1176,40 @@ func TestMediaWait_Completes(t *testing.T) {
 	}
 	if polls.Load() != 2 {
 		t.Fatalf("unexpected poll count: %d", polls.Load())
+	}
+}
+
+func TestMediaWait_RetriesGatewayErrors(t *testing.T) {
+	var polls atomic.Int32
+
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/generation/task/task_retry_gateway" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if polls.Add(1) <= 3 {
+			writeJSON(w, http.StatusBadGateway, map[string]any{"error": map[string]any{"message": "upstream unavailable"}})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"id":       "task_retry_gateway",
+			"status":   "completed",
+			"progress": 1.0,
+			"model":    "minimax_h3",
+		})
+	})
+
+	task, err := client.Modal.Wait(context.Background(), "task_retry_gateway",
+		sa.WithPollInterval(time.Millisecond),
+		sa.WithPollTimeout(time.Second),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task.Status != "completed" {
+		t.Fatalf("unexpected status: %s", task.Status)
+	}
+	if polls.Load() != 4 {
+		t.Fatalf("expected initial request plus three retries, got %d polls", polls.Load())
 	}
 }
 

@@ -121,6 +121,11 @@ func (m *ModalService) ScanTextContent(ctx context.Context, req TextContentScanR
 	return mmservice.ScanTextContent(m.client, ctx, mmtypes.TextContentScanRequest(req), buildRequestOptions(opts).headers)
 }
 
+// ScanCharacterQuality reviews character copy quality and safety.
+func (m *ModalService) ScanCharacterQuality(ctx context.Context, req CharacterQualityScanRequest, opts ...RequestOption) (*CharacterQualityScanResponse, error) {
+	return mmservice.ScanCharacterQuality(m.client, ctx, mmtypes.CharacterQualityScanRequest(req), buildRequestOptions(opts).headers)
+}
+
 // ScanVisualStructuredTextFusion scans a digital-human cover image and structured text together.
 func (m *ModalService) ScanVisualStructuredTextFusion(ctx context.Context, req VisualStructuredTextFusionScanRequest, opts ...RequestOption) (*VisualStructuredTextFusionScanResponse, error) {
 	return mmservice.ScanVisualStructuredTextFusion(m.client, ctx, mmtypes.VisualStructuredTextFusionScanRequest(req), buildRequestOptions(opts).headers)

@@ -59,6 +59,15 @@ type TextContentScanRequest = mmtypes.TextContentScanRequest
 // TextContentScanResponse is the parsed response returned by POST /v1/text/content/scan.
 type TextContentScanResponse = mmtypes.TextContentScanResponse
 
+// CharacterQualityScanRequest is the flat request body for POST /v1/char/quality/scan.
+type CharacterQualityScanRequest = mmtypes.CharacterQualityScanRequest
+
+// CharacterQualitySafetyTag contains the character quality scan safety result.
+type CharacterQualitySafetyTag = mmtypes.CharacterQualitySafetyTag
+
+// CharacterQualityScanResponse is the parsed response from POST /v1/char/quality/scan.
+type CharacterQualityScanResponse = mmtypes.CharacterQualityScanResponse
+
 // TextScanData contains text moderation results.
 type TextScanData = mmtypes.TextScanData
 

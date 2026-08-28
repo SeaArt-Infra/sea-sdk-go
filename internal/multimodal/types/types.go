@@ -516,6 +516,75 @@ func (r *TextContentScanResponse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// CharacterQualityScanRequest is the flat request body for
+// POST /v1/char/quality/scan. Use either the production-line A fields or the
+// production-line B fields in one request.
+type CharacterQualityScanRequest struct {
+	// Name is the character name shared by both production lines.
+	Name string `json:"name,omitempty"`
+	// FirstMsg is the production-line A opening message.
+	FirstMsg string `json:"first_msg,omitempty"`
+	// Description is the production-line A character description.
+	Description string `json:"description,omitempty"`
+	// Scenario is the production-line A scenario.
+	Scenario string `json:"scenario,omitempty"`
+	// ExampleDialogue is the production-line A example dialogue.
+	ExampleDialogue string `json:"example_dialogue,omitempty"`
+	// OpeningLine is the production-line B opening message.
+	OpeningLine string `json:"opening_line,omitempty"`
+	// CharacterIntroduction is the production-line B character description.
+	CharacterIntroduction string `json:"character_introduction,omitempty"`
+	// ScenarioSetting is the production-line B scenario.
+	ScenarioSetting string `json:"scenario_setting,omitempty"`
+	// DialogueExamples is the production-line B example dialogue.
+	DialogueExamples string `json:"dialogue_examples,omitempty"`
+	// PersonalitySetting is the optional production-line B personality setting.
+	PersonalitySetting string `json:"personality_setting,omitempty"`
+}
+
+// CharacterQualitySafetyTag contains the overall safety tag and any matched
+// request fields. Fields are keyed by the original request field names.
+type CharacterQualitySafetyTag struct {
+	Tag    string         `json:"tag,omitempty"`
+	Fields map[string]any `json:"fields,omitempty"`
+}
+
+// CharacterQualityScanResponse is returned by POST /v1/char/quality/scan.
+// Extra keeps any downstream fields that are not modeled by the SDK yet.
+type CharacterQualityScanResponse struct {
+	// OK reports whether the downstream business request completed successfully.
+	OK bool `json:"ok"`
+	// Level is the character copy quality grade, such as S, A+, A, B, or C.
+	Level string `json:"level,omitempty"`
+	// SafetyTag contains the overall safety result and field-level matches.
+	SafetyTag *CharacterQualitySafetyTag `json:"safety_tag,omitempty"`
+	// Usage contains gateway-injected billing metadata. Usage.Cost is fixed by the gateway.
+	Usage *Usage `json:"usage,omitempty"`
+	// Extra contains downstream fields not modeled by the SDK.
+	Extra map[string]any `json:"-"`
+}
+
+func (r *CharacterQualityScanResponse) UnmarshalJSON(data []byte) error {
+	type alias CharacterQualityScanResponse
+	var typed alias
+	if err := json.Unmarshal(data, &typed); err != nil {
+		return err
+	}
+
+	var extra map[string]any
+	if err := json.Unmarshal(data, &extra); err != nil {
+		return err
+	}
+	delete(extra, "ok")
+	delete(extra, "level")
+	delete(extra, "safety_tag")
+	delete(extra, "usage")
+
+	*r = CharacterQualityScanResponse(typed)
+	r.Extra = extra
+	return nil
+}
+
 // VisualStructuredTextFusionScanRequest is the request body for
 // POST /v1/visual/structured/text/fusion/scan.
 type VisualStructuredTextFusionScanRequest struct {
