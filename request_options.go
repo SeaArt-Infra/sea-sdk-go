@@ -88,3 +88,30 @@ func moveModelToHeader(body JSONMap, headers http.Header) (JSONMap, http.Header,
 	requestHeaders.Set("X-Model", model)
 	return requestBody, requestHeaders, nil
 }
+
+func keepModelInBody(body JSONMap, headers http.Header) (JSONMap, http.Header, error) {
+	requestBody := make(JSONMap, len(body))
+	for key, value := range body {
+		requestBody[key] = value
+	}
+	requestHeaders := headers.Clone()
+	if requestHeaders == nil {
+		requestHeaders = make(http.Header)
+	}
+
+	for key := range requestHeaders {
+		if strings.EqualFold(key, "X-Model") {
+			return nil, nil, &Error{
+				Kind:    ErrGeneral,
+				Message: "X-Model is not supported for LLM requests; set model in the request body",
+			}
+		}
+	}
+	if modelValue, ok := requestBody["model"]; ok {
+		model, ok := modelValue.(string)
+		if !ok || strings.TrimSpace(model) == "" {
+			return nil, nil, &Error{Kind: ErrGeneral, Message: "model must be a non-empty string"}
+		}
+	}
+	return requestBody, requestHeaders, nil
+}
