@@ -76,5 +76,5 @@ func (l *LLMService) ListModels(ctx context.Context, opts ...RequestOption) (Raw
 }
 
 func (l *LLMService) requestModel(payload JSONMap, opts []RequestOption) (JSONMap, http.Header, error) {
-	return moveModelToHeader(payload, buildRequestOptions(opts).headers)
+	return keepModelInBody(payload, buildRequestOptions(opts).headers)
 }

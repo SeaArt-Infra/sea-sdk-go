@@ -3,6 +3,7 @@ package sa_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -50,11 +51,11 @@ func TestLLMChatCompletions(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if got := r.Header.Get("X-Model"); got != "gpt-4o-mini" {
-			t.Fatalf("unexpected model header: %s", got)
+		if got := r.Header.Get("X-Model"); got != "" {
+			t.Fatalf("LLM request must not send X-Model: %s", got)
 		}
-		if _, ok := body["model"]; ok {
-			t.Fatalf("model must not be in body: %v", body["model"])
+		if body["model"] != "gpt-4o-mini" {
+			t.Fatalf("unexpected body model: %v", body["model"])
 		}
 		if body["reasoning_effort"] != "low" {
 			t.Fatalf("missing extra field: %v", body["reasoning_effort"])
@@ -106,11 +107,11 @@ func TestLLMMessages(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if got := r.Header.Get("X-Model"); got != "claude-3-5-sonnet" {
-			t.Fatalf("unexpected model header: %s", got)
+		if got := r.Header.Get("X-Model"); got != "" {
+			t.Fatalf("LLM request must not send X-Model: %s", got)
 		}
-		if _, ok := body["model"]; ok {
-			t.Fatalf("model must not be in body: %v", body["model"])
+		if body["model"] != "claude-3-5-sonnet" {
+			t.Fatalf("unexpected body model: %v", body["model"])
 		}
 		if body["max_tokens"] != float64(32) {
 			t.Fatalf("unexpected max_tokens: %v", body["max_tokens"])
@@ -151,11 +152,11 @@ func TestLLMResponses(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if got := r.Header.Get("X-Model"); got != "gpt-4.1-mini" {
-			t.Fatalf("unexpected model header: %s", got)
+		if got := r.Header.Get("X-Model"); got != "" {
+			t.Fatalf("LLM request must not send X-Model: %s", got)
 		}
-		if _, ok := body["model"]; ok {
-			t.Fatalf("model must not be in body: %v", body["model"])
+		if body["model"] != "gpt-4.1-mini" {
+			t.Fatalf("unexpected body model: %v", body["model"])
 		}
 		if body["input"] != "hello" {
 			t.Fatalf("unexpected input: %v", body["input"])
@@ -204,11 +205,11 @@ func TestLLMRerank(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if got := r.Header.Get("X-Model"); got != "qwen3-rerank" {
-			t.Fatalf("unexpected model header: %s", got)
+		if got := r.Header.Get("X-Model"); got != "" {
+			t.Fatalf("LLM request must not send X-Model: %s", got)
 		}
-		if _, ok := body["model"]; ok {
-			t.Fatalf("model must not be in body: %v", body["model"])
+		if body["model"] != "qwen3-rerank" {
+			t.Fatalf("unexpected body model: %v", body["model"])
 		}
 		if body["query"] != "mountain lake" {
 			t.Fatalf("unexpected query: %v", body["query"])
@@ -258,11 +259,11 @@ func TestLLMEmbeddings(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if got := r.Header.Get("X-Model"); got != "text-embedding-3-small" {
-			t.Fatalf("unexpected model header: %s", got)
+		if got := r.Header.Get("X-Model"); got != "" {
+			t.Fatalf("LLM request must not send X-Model: %s", got)
 		}
-		if _, ok := body["model"]; ok {
-			t.Fatalf("model must not be in body: %v", body["model"])
+		if body["model"] != "text-embedding-3-small" {
+			t.Fatalf("unexpected body model: %v", body["model"])
 		}
 
 		writeJSON(w, 200, sa.EmbeddingsResponse{
@@ -456,26 +457,37 @@ func TestLLMUsesDedicatedBaseURL(t *testing.T) {
 	}
 }
 
-func TestLLMErrorClassification(t *testing.T) {
-	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 401, map[string]any{
-			"error": map[string]any{
-				"message": "invalid api key",
-			},
+func TestLLMHTTPErrorsPreserveGatewayStatusAndMessage(t *testing.T) {
+	testCases := []struct {
+		status int
+		kind   string
+	}{
+		{http.StatusBadRequest, sa.ErrGeneral},
+		{http.StatusUnauthorized, sa.ErrAuth},
+		{http.StatusForbidden, sa.ErrAuth},
+		{http.StatusNotFound, sa.ErrGeneral},
+		{http.StatusRequestTimeout, sa.ErrTimeout},
+		{http.StatusTooManyRequests, sa.ErrQuota},
+		{http.StatusInternalServerError, sa.ErrGeneral},
+		{http.StatusBadGateway, sa.ErrGeneral},
+		{http.StatusServiceUnavailable, sa.ErrGeneral},
+		{http.StatusGatewayTimeout, sa.ErrTimeout},
+	}
+	for _, tc := range testCases {
+		t.Run(fmt.Sprint(tc.status), func(t *testing.T) {
+			_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, tc.status, map[string]any{"error": map[string]string{"message": fmt.Sprintf("gateway-%d", tc.status)}})
+			})
+
+			_, err := client.LLM.ListModels(context.Background())
+			var sdkErr *sa.Error
+			if !errors.As(err, &sdkErr) {
+				t.Fatalf("expected *sa.Error, got %T (%v)", err, err)
+			}
+			if sdkErr.Status != tc.status || sdkErr.Kind != tc.kind || sdkErr.Message != fmt.Sprintf("gateway-%d", tc.status) {
+				t.Fatalf("unexpected SDK error: %+v", sdkErr)
+			}
 		})
-	})
-
-	_, err := client.LLM.ListModels(context.Background())
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-
-	sdkErr, ok := err.(*sa.Error)
-	if !ok {
-		t.Fatalf("expected *sa.Error, got %T", err)
-	}
-	if sdkErr.Kind != sa.ErrAuth {
-		t.Fatalf("expected ErrAuth, got %s", sdkErr.Kind)
 	}
 }
 
@@ -487,11 +499,11 @@ func TestLLMChatCompletionsStream(t *testing.T) {
 
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		if got := r.Header.Get("X-Model"); got != "gpt-4o-mini" {
-			t.Fatalf("unexpected model header: %s", got)
+		if got := r.Header.Get("X-Model"); got != "" {
+			t.Fatalf("LLM request must not send X-Model: %s", got)
 		}
-		if _, ok := body["model"]; ok {
-			t.Fatalf("model must not be in body: %v", body["model"])
+		if body["model"] != "gpt-4o-mini" {
+			t.Fatalf("unexpected body model: %v", body["model"])
 		}
 		if body["stream"] != true {
 			t.Fatalf("expected stream=true, got %v", body["stream"])
@@ -546,7 +558,7 @@ func TestLLMChatCompletionsStream(t *testing.T) {
 	}
 }
 
-func TestLLMRejectsConflictingModelAndHeader(t *testing.T) {
+func TestLLMRejectsXModelHeader(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("request should not be sent")
 	})
@@ -556,7 +568,7 @@ func TestLLMRejectsConflictingModelAndHeader(t *testing.T) {
 		sa.JSONMap{"model": "gpt-4o-mini", "messages": []sa.JSONMap{}},
 		sa.WithHeader("X-Model", "another-model"),
 	)
-	if err == nil || !strings.Contains(err.Error(), "model and X-Model cannot both be set") {
+	if err == nil || !strings.Contains(err.Error(), "X-Model is not supported for LLM requests") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
