@@ -1,6 +1,11 @@
 package sa
 
-import "testing"
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestNew_DefaultBaseURLs(t *testing.T) {
 	client, err := New(&ClientConfig{APIKey: "test-key"})
@@ -104,5 +109,42 @@ func TestNew_NilConfigUsesDefaults(t *testing.T) {
 	}
 	if client.Passthrough == nil {
 		t.Fatal("expected Passthrough service to be initialized")
+	}
+}
+
+func TestNew_ClonesDefaultHeadersForEachService(t *testing.T) {
+	headers := http.Header{"X-Infra-Project-Id": {"project-123"}}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Infra-Project-Id"); got != "project-123" {
+			t.Fatalf("unexpected default header: %q", got)
+		}
+		if got := r.Header.Get("X-Request-Id"); got != "request-override" {
+			t.Fatalf("unexpected overridden header: %q", got)
+		}
+		_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+	}))
+	defer server.Close()
+
+	headers.Set("X-Request-Id", "request-default")
+	client, err := New(&ClientConfig{APIKey: "test-key", Headers: headers})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	headers.Set("X-Infra-Project-Id", "changed-after-new")
+
+	for _, serviceHeaders := range []http.Header{
+		client.Modal.client.Headers,
+		client.LLM.client.Headers,
+		client.Passthrough.client.Headers,
+		client.Billing.client.Headers,
+	} {
+		if got := serviceHeaders.Get("X-Infra-Project-Id"); got != "project-123" {
+			t.Fatalf("unexpected default header: %q", got)
+		}
+	}
+
+	client.LLM.client.BaseURL = server.URL
+	if _, err := client.LLM.ListModels(context.Background(), WithHeader("x-request-id", "request-override")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

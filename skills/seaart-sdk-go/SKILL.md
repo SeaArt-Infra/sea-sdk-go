@@ -39,6 +39,22 @@ Passing `BaseURL` derives `/model` and `/llm` service URLs. Override `ModelBaseU
 
 For LLM APIs, keep the selected model in the payload's top-level `model` field. The SDK serializes it in the JSON body and does not use `X-Model`; do not pass `X-Model` with `sa.WithHeader(...)` for LLM requests. Multimodal task creation and precharge continue to route their body model through `X-Model`.
 
+## Gateway Context Headers
+
+The gateway requires `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id` on every request. Configure them through `ClientConfig.Headers`; the SDK sends them for generation, task polling, LLM, billing, scans, and passthrough requests. Per-call `sa.WithHeaders(...)` values override a client default for that call only.
+
+```go
+headers := http.Header{
+    "x-infra-project-id": {"project-id"},
+    "x-infra-af-id":      {"af-id"},
+    "x-infra-session-id": {"session-id"},
+    "x-infra-user-id":    {"user-id"},
+    "x-request-id":       {"request-id"},
+}
+client, err := sa.New(&sa.ClientConfig{APIKey: "sa-your-api-key", Headers: headers})
+if err != nil { log.Fatal(err) }
+```
+
 ## Multimodal Tasks
 
 Search before choosing a model, and retrieve its model skill when exact parameter names matter:

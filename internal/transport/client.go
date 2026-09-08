@@ -15,6 +15,7 @@ type Client struct {
 	APIKey     string
 	BaseURL    string
 	Project    string
+	Headers    http.Header
 	UserAgent  string
 	HTTPClient *http.Client
 }
@@ -63,6 +64,12 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	req.Header.Set("User-Agent", c.UserAgent)
 	if c.Project != "" {
 		req.Header.Set("X-Project", c.Project)
+	}
+	for key, values := range c.Headers {
+		req.Header.Del(key)
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
 	}
 	for key, values := range headers {
 		req.Header.Del(key)
