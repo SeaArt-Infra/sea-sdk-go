@@ -24,6 +24,7 @@ Features:
 | [Audio Scan](#audio-scan) | `client.Modal.ScanAudio(...)` | Detect audio content risks |
 | [LLM API](#llm-api) | `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank compatible APIs |
 | [Billing API](#billing-api) | `client.Billing` | Query the authenticated team's cost statement |
+| [Gateway Context Headers](#gateway-context-headers) | `ClientConfig.Headers` | Required caller context sent with every gateway request |
 
 ## Installation
 
@@ -59,6 +60,29 @@ if err != nil {
     log.Fatal(err)
 }
 ```
+
+## Gateway Context Headers
+
+Every gateway request requires caller context. Set these values once in `ClientConfig.Headers`; the SDK attaches them to multimodal, LLM, billing, scan, passthrough, and task-polling requests. A per-call `sa.WithHeaders(...)` value overrides the corresponding client default only for that request.
+
+```go
+client, err := sa.New(&sa.ClientConfig{
+    APIKey:  "sa-your-api-key",
+    BaseURL: "https://gateway.example.com",
+    Headers: http.Header{
+        "x-infra-project-id": {"project-id"},
+        "x-infra-af-id":      {"af-id"},
+        "x-infra-session-id": {"session-id"},
+        "x-infra-user-id":    {"user-id"},
+        "x-request-id":       {"request-id"},
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+Supply values from the calling service's request context. Do not hard-code another user's identity or reuse a client across requests with different context values.
 
 ## Multimodal API
 
@@ -834,6 +858,22 @@ for _, item := range statement.Items.Items {
 Set `BillingBaseURL` only when the billing route is hosted separately; otherwise `BaseURL` derives it as `<BaseURL>/monitor`.
 
 For LLM APIs, keep the selected model in the payload's top-level `model` field. The SDK serializes it in the JSON body and does not use `X-Model`; do not pass `X-Model` with `sa.WithHeader(...)` for LLM requests. Multimodal task creation and precharge continue to route their body model through `X-Model`.
+
+## Gateway Context Headers
+
+The gateway requires `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id` on every request. Configure them through `ClientConfig.Headers`; they are sent for generation, task polling, LLM, billing, scans, and passthrough requests. Per-call `sa.WithHeaders(...)` values override a client default for that call only.
+
+```go
+headers := http.Header{
+    "x-infra-project-id": {"project-id"},
+    "x-infra-af-id":      {"af-id"},
+    "x-infra-session-id": {"session-id"},
+    "x-infra-user-id":    {"user-id"},
+    "x-request-id":       {"request-id"},
+}
+client, err := sa.New(&sa.ClientConfig{APIKey: "sa-your-api-key", Headers: headers})
+if err != nil { log.Fatal(err) }
+```
 
 ## Multimodal Tasks
 

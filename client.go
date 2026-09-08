@@ -28,6 +28,7 @@ type Client struct {
 	passthroughBaseURL string
 	billingBaseURL     string
 	project            string
+	headers            http.Header
 	httpClient         *http.Client
 
 	Modal       *ModalService
@@ -49,6 +50,7 @@ type ClientConfig struct {
 	PassthroughBaseURL string
 	BillingBaseURL     string
 	Project            string
+	Headers            http.Header
 	HTTPClient         *http.Client
 	Timeout            time.Duration
 }
@@ -137,6 +139,7 @@ func resolvePassthroughURL(raw, model string) (string, error) {
 
 func newClient(cfg ClientConfig, endpoints resolvedEndpoints) *Client {
 	httpClient := buildHTTPClient(cfg)
+	headers := cfg.Headers.Clone()
 
 	client := &Client{
 		apiKey:             cfg.APIKey,
@@ -146,6 +149,7 @@ func newClient(cfg ClientConfig, endpoints resolvedEndpoints) *Client {
 		passthroughBaseURL: endpoints.passthrough,
 		billingBaseURL:     endpoints.billing,
 		project:            cfg.Project,
+		headers:            headers,
 		httpClient:         httpClient,
 	}
 
@@ -154,6 +158,7 @@ func newClient(cfg ClientConfig, endpoints resolvedEndpoints) *Client {
 			APIKey:     client.apiKey,
 			BaseURL:    client.modelBaseURL,
 			Project:    client.project,
+			Headers:    client.headers.Clone(),
 			UserAgent:  "sa-go/" + sdkVersion,
 			HTTPClient: httpClient,
 		},
@@ -163,6 +168,7 @@ func newClient(cfg ClientConfig, endpoints resolvedEndpoints) *Client {
 			APIKey:     client.apiKey,
 			BaseURL:    client.llmBaseURL,
 			Project:    client.project,
+			Headers:    client.headers.Clone(),
 			UserAgent:  "sa-go/" + sdkVersion,
 			HTTPClient: httpClient,
 		},
@@ -172,12 +178,13 @@ func newClient(cfg ClientConfig, endpoints resolvedEndpoints) *Client {
 			APIKey:     client.apiKey,
 			BaseURL:    client.passthroughBaseURL,
 			Project:    client.project,
+			Headers:    client.headers.Clone(),
 			UserAgent:  "sa-go/" + sdkVersion,
 			HTTPClient: httpClient,
 		},
 	}
 	client.Billing = &BillingService{client: &transport.Client{
-		APIKey: client.apiKey, BaseURL: client.billingBaseURL, Project: client.project,
+		APIKey: client.apiKey, BaseURL: client.billingBaseURL, Project: client.project, Headers: client.headers.Clone(),
 		UserAgent: "sa-go/" + sdkVersion, HTTPClient: httpClient,
 	}}
 
