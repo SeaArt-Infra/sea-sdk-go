@@ -16,7 +16,7 @@ go get github.com/SeaArt-Infra/sea-sdk-go
 ## Workflow
 
 1. Create one `sa.Client` with `sa.New` and reuse it across requests.
-2. Select `client.Modal` for generation, model skills, precharge, or safety scans; `client.LLM` for LLM APIs; and `client.Passthrough` for vendor-native paths.
+2. Select `client.Modal` for generation, model skills, precharge, or safety scans; `client.Billing` for team-scoped cost statements; `client.LLM` for LLM APIs; and `client.Passthrough` for vendor-native paths.
 3. For a multimodal model, retrieve `client.Modal.GetModelSkill` before building model-specific parameters.
 4. Poll generation tasks with `task.Wait`, checking both the returned task and error.
 5. Decode successful LLM responses or stream event data with `sa.Decode[T]`; inspect `*sa.Error` at the request boundary.
@@ -41,19 +41,24 @@ For LLM APIs, keep the selected model in the payload's top-level `model` field. 
 
 ## Gateway Context Headers
 
-The gateway requires `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id` on every request. Configure them through `ClientConfig.Headers`; the SDK sends them for generation, task polling, LLM, billing, scans, and passthrough requests. Per-call `sa.WithHeaders(...)` values override a client default for that call only.
+Gateway API calls require `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id`. These values are request-specific, so derive them from the current caller and pass them with `sa.WithHeaders(...)`. `task.Wait(...)` does not require these headers.
 
 ```go
-headers := http.Header{
-    "x-infra-project-id": {"project-id"},
-    "x-infra-af-id":      {"af-id"},
-    "x-infra-session-id": {"session-id"},
-    "x-infra-user-id":    {"user-id"},
-    "x-request-id":       {"request-id"},
-}
-client, err := sa.New(&sa.ClientConfig{APIKey: "sa-your-api-key", Headers: headers})
+requestContext := sa.WithHeaders(http.Header{
+    "x-infra-project-id": {projectID},
+    "x-infra-af-id":      {afID},
+    "x-infra-session-id": {sessionID},
+    "x-infra-user-id":    {userID},
+    "x-request-id":       {requestID},
+})
+raw, err := client.LLM.ChatCompletions(ctx, sa.JSONMap{
+    "model": "model-id",
+    "messages": []sa.JSONMap{{"role": "user", "content": "Hello"}},
+}, requestContext)
 if err != nil { log.Fatal(err) }
 ```
+
+Pass `requestContext` as the final argument to every direct gateway API call, such as `client.Modal.Create(ctx, body, requestContext)`, `client.Billing.Query(ctx, query, requestContext)`, and `client.LLM.ChatCompletions(ctx, payload, requestContext)`. Reserve `ClientConfig.Headers` for headers that are genuinely fixed for the client's whole lifetime.
 
 ## Multimodal Tasks
 
@@ -63,13 +68,13 @@ Search before choosing a model, and retrieve its model skill when exact paramete
 models, err := client.Modal.ListModels(ctx, sa.ModalModelSearchParams{
     Query: "image",
     Limit: 10,
-})
+}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
 fmt.Println(models.Hits)
 
-skill, err := client.Modal.GetModelSkill(ctx, "alibaba_wanx26_i2v_flash")
+skill, err := client.Modal.GetModelSkill(ctx, "alibaba_wanx26_i2v_flash", requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -90,7 +95,7 @@ body := sa.NewTask("alibaba_wanx26_i2v_flash").
     }).
     Build()
 
-task, err := client.Modal.Create(ctx, body)
+task, err := client.Modal.Create(ctx, body, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -105,7 +110,12 @@ for _, output := range task.Output {
 }
 ```
 
-Use `client.Modal.Precharge(ctx, body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `GetModelSkill`.
+Use `client.Modal.Precharge(ctx, body, requestContext)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `GetModelSkill`.
+
+## Billing Queries
+
+Use `client.Billing.Query(ctx, sa.BillingQuery{...}, requestContext)` for the authenticated team's cost statement. The gateway derives the team from the Bearer token, so callers must not pass `team_alias`. The default environment scope is `develop` plus `release`; set `Environment` to one of those values to select a single environment. Use `Start`, `End`, `Provider`, `CredentialName`, `ModelGroup`, `Page`, and `PageSize` for supported filters.
+Use RFC3339 or date-only values for `Start`/`End`; the range is `[start, end)`, and omitted values default to the previous seven days.
 
 ## ComfyUI Quick Apps
 
@@ -116,7 +126,7 @@ highMemory := true
 task, err := client.Modal.CreateComfyUITask(ctx, "d32kq8le878c73876j5g", []sa.ComfyUIInput{
     {Field: "image", Value: "https://image.cdn2.seaart.me/upload/input.webp"},
     {Field: "select", Value: 1},
-}, &highMemory)
+}, &highMemory, requestContext)
 if err != nil { log.Fatal(err) }
 task, err = task.Wait(ctx, sa.WithPollInterval(3*time.Second), sa.WithPollTimeout(5*time.Minute))
 if err != nil { log.Fatal(err) }
@@ -131,7 +141,7 @@ Non-streaming LLM methods return `sa.RawResponse`. Deserialize them to the match
 raw, err := client.LLM.ChatCompletions(ctx, sa.JSONMap{
     "model": "gpt-4o-mini",
     "messages": []sa.JSONMap{{"role": "user", "content": "Hello"}},
-})
+}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -148,7 +158,7 @@ Use the dedicated streaming methods rather than setting `stream: true` on non-st
 events, err := client.LLM.ChatCompletionsStream(ctx, sa.JSONMap{
     "model": "gpt-4o-mini",
     "messages": []sa.JSONMap{{"role": "user", "content": "Hello"}},
-})
+}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -176,7 +186,7 @@ Use passthrough only for a vendor-native path such as `/kling/...`, `/vidu/...`,
 Use the dedicated scan methods for image/video, face, audio, sensitive-word, short-text, character-copy quality, or visual-and-structured-text checks. Image and face scans accept either `URI` or `ImgBase64`; video and audio scans require `URI`. Character quality scans use `client.Modal.ScanCharacterQuality(...)` with a flat production-line A or B field set.
 
 ```go
-if _, err := client.Modal.ScanText(ctx, sa.TextScanRequest{Text: "Text to check"}); err != nil {
+if _, err := client.Modal.ScanText(ctx, sa.TextScanRequest{Text: "Text to check"}, requestContext); err != nil {
     var seaErr *sa.Error
     if errors.As(err, &seaErr) {
         switch seaErr.Kind {

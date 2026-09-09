@@ -1335,6 +1335,21 @@ func TestBillingQuery(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
 			t.Fatalf("authorization = %q", got)
 		}
+		if got := r.Header.Get("X-Infra-Project-Id"); got != "project-123" {
+			t.Fatalf("project header = %q", got)
+		}
+		if got := r.Header.Get("X-Infra-Af-Id"); got != "af-123" {
+			t.Fatalf("af header = %q", got)
+		}
+		if got := r.Header.Get("X-Infra-Session-Id"); got != "session-123" {
+			t.Fatalf("session header = %q", got)
+		}
+		if got := r.Header.Get("X-Infra-User-Id"); got != "user-123" {
+			t.Fatalf("user header = %q", got)
+		}
+		if got := r.Header.Get("X-Request-Id"); got != "request-override" {
+			t.Fatalf("request header = %q", got)
+		}
 		writeJSON(w, 200, map[string]any{"code": 0, "message": "ok", "data": map[string]any{
 			"team": "SeaComfyui", "environments": []string{"release"},
 			"summary": map[string]any{"total_requests": 3, "total_cost": "1.25", "currency": "USD"},
@@ -1346,7 +1361,16 @@ func TestBillingQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err := client.Billing.Query(context.Background(), sa.BillingQuery{Environment: "release"})
+	response, err := client.Billing.Query(context.Background(), sa.BillingQuery{Environment: "release"},
+		sa.WithHeaders(http.Header{
+			"X-Infra-Project-Id": {"project-123"},
+			"X-Infra-Af-Id":      {"af-123"},
+			"X-Infra-Session-Id": {"session-123"},
+			"X-Infra-User-Id":    {"user-123"},
+			"X-Request-Id":       {"request-123"},
+		}),
+		sa.WithHeader("X-Request-Id", "request-override"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

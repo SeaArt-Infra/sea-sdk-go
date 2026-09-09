@@ -24,7 +24,7 @@ Features:
 | [Audio Scan](#audio-scan) | `client.Modal.ScanAudio(...)` | Detect audio content risks |
 | [LLM API](#llm-api) | `client.LLM` | OpenAI / Anthropic / Responses / Embeddings / Rerank compatible APIs |
 | [Billing API](#billing-api) | `client.Billing` | Query the authenticated team's cost statement |
-| [Gateway Context Headers](#gateway-context-headers) | `ClientConfig.Headers` | Required caller context sent with every gateway request |
+| [Gateway Context Headers](#gateway-context-headers) | `sa.WithHeaders(...)` | Required caller context supplied with each gateway request |
 
 ## Installation
 
@@ -63,26 +63,26 @@ if err != nil {
 
 ## Gateway Context Headers
 
-Every gateway request requires caller context. Set these values once in `ClientConfig.Headers`; the SDK attaches them to multimodal, LLM, billing, scan, passthrough, and task-polling requests. A per-call `sa.WithHeaders(...)` value overrides the corresponding client default only for that request.
+Gateway API calls require caller context. These values commonly change with the end user or incoming request, so derive them from the current request and pass them with `sa.WithHeaders(...)`. Do not place dynamic caller identity in long-lived `ClientConfig.Headers`. `task.Wait(...)` does not require these headers.
 
 ```go
-client, err := sa.New(&sa.ClientConfig{
-    APIKey:  "sa-your-api-key",
-    BaseURL: "https://gateway.example.com",
-    Headers: http.Header{
-        "x-infra-project-id": {"project-id"},
-        "x-infra-af-id":      {"af-id"},
-        "x-infra-session-id": {"session-id"},
-        "x-infra-user-id":    {"user-id"},
-        "x-request-id":       {"request-id"},
-    },
+requestContext := sa.WithHeaders(http.Header{
+    "x-infra-project-id": {projectID},
+    "x-infra-af-id":      {afID},
+    "x-infra-session-id": {sessionID},
+    "x-infra-user-id":    {userID},
+    "x-request-id":       {requestID},
 })
+raw, err := client.LLM.ChatCompletions(ctx, sa.JSONMap{
+    "model": "model-id",
+    "messages": []sa.JSONMap{{"role": "user", "content": "Hello"}},
+}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
 ```
 
-Supply values from the calling service's request context. Do not hard-code another user's identity or reuse a client across requests with different context values.
+Pass `requestContext` as the final argument to every direct gateway API call, such as `client.Modal.Create(ctx, body, requestContext)`, `client.Billing.Query(ctx, query, requestContext)`, and `client.LLM.ChatCompletions(ctx, payload, requestContext)`. `ClientConfig.Headers` remains available only for headers that are genuinely fixed for the client's whole lifetime. Do not hard-code or reuse another caller's identity.
 
 ## Multimodal API
 
@@ -92,7 +92,7 @@ Supply values from the calling service's request context. Do not hard-code anoth
 models, err := client.Modal.ListModels(ctx, sa.ModalModelSearchParams{
     Query: "",
     Limit: 2,
-})
+}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -100,7 +100,7 @@ for _, hit := range models.Hits {
     fmt.Println(hit["name"])
 }
 
-skill, err := client.Modal.GetModelSkill(ctx, "alibaba_animate_anyone_detect")
+skill, err := client.Modal.GetModelSkill(ctx, "alibaba_animate_anyone_detect", requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -171,7 +171,7 @@ body := sa.NewTask("alibaba_wanx26_i2v_flash").
     Metadata("trace_id", "trace-123").
     Build()
 
-task, err := client.Modal.Create(ctx, body)
+task, err := client.Modal.Create(ctx, body, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -195,7 +195,7 @@ fmt.Println(task.Status, task.Progress, task.URLs())
 You can also continue waiting after creation:
 
 ```go
-task, err := client.Modal.Create(ctx, sa.JSONMap{"model": "alibaba_wanx26_i2v_flash"})
+task, err := client.Modal.Create(ctx, sa.JSONMap{"model": "alibaba_wanx26_i2v_flash"}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -221,12 +221,14 @@ Pass template IDs to `ListComfyUITemplates` to retrieve the corresponding quick-
 
 ```go
 specs, err := client.Modal.ListComfyUITemplates(ctx, []string{"d32kq8le878c73876j5g"})
-if err != nil { log.Fatal(err) }
+if err != nil {
+    log.Fatal(err)
+}
 highMemory := true
 task, err := client.Modal.CreateComfyUITask(ctx, "d32kq8le878c73876j5g", []sa.ComfyUIInput{
     {Field: "image", Value: "https://image.cdn2.seaart.me/upload/input.webp"},
     {Field: "select", Value: 1},
-}, &highMemory)
+}, &highMemory, requestContext)
 if err != nil { log.Fatal(err) }
 task, err = task.Wait(ctx, sa.WithPollInterval(3*time.Second), sa.WithPollTimeout(5*time.Minute))
 if err != nil { log.Fatal(err) }
@@ -271,7 +273,7 @@ body := sa.NewTask("volces_seedream_4_5").
     }).
     Build()
 
-resp, err := client.Modal.Precharge(ctx, body)
+resp, err := client.Modal.Precharge(ctx, body, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -834,46 +836,28 @@ if err != nil {
 
 Passing `BaseURL` derives `/model` and `/llm` service URLs. Override `ModelBaseURL`, `LLMBaseURL`, or `PassthroughBaseURL` only when services use separate gateways. Do not expose API keys in source control or logs.
 
-## Billing API
-
-`client.Billing.Query` calls `GET /monitor/api/v1/cost/billing`. The gateway derives the team from the Bearer token and injects `X-User-ID`; callers do not pass a team identifier. By default the query covers `develop` and `release`. Set `Environment` to `develop` or `release` to select one environment.
-
-`Start` and `End` define the time range. They accept RFC3339 timestamps such as `2026-08-19T00:00:00Z`, UTC date-times without a zone, date-only values such as `2026-08-19`, or Unix seconds. The range is `[start, end)`. When `End` is date-only, that whole day is included; without either value, the server defaults to the previous seven days.
-
-```go
-statement, err := client.Billing.Query(ctx, sa.BillingQuery{
-    Start: "2026-08-19T00:00:00Z",
-    End: "2026-08-20T00:00:00Z",
-    Environment: "release",
-    Page: 1,
-    PageSize: 20,
-})
-if err != nil { log.Fatal(err) }
-fmt.Println(statement.Team, statement.Summary.TotalCost)
-for _, item := range statement.Items.Items {
-    fmt.Println(item.Provider, item.ModelGroup, item.TotalCost)
-}
-```
-
-Set `BillingBaseURL` only when the billing route is hosted separately; otherwise `BaseURL` derives it as `<BaseURL>/monitor`.
-
 For LLM APIs, keep the selected model in the payload's top-level `model` field. The SDK serializes it in the JSON body and does not use `X-Model`; do not pass `X-Model` with `sa.WithHeader(...)` for LLM requests. Multimodal task creation and precharge continue to route their body model through `X-Model`.
 
 ## Gateway Context Headers
 
-The gateway requires `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id` on every request. Configure them through `ClientConfig.Headers`; they are sent for generation, task polling, LLM, billing, scans, and passthrough requests. Per-call `sa.WithHeaders(...)` values override a client default for that call only.
+Gateway API calls require `x-infra-project-id`, `x-infra-af-id`, `x-infra-session-id`, `x-infra-user-id`, and `x-request-id`. These values are request-specific, so derive them from the current caller and pass them with `sa.WithHeaders(...)`. `task.Wait(...)` does not require these headers.
 
 ```go
-headers := http.Header{
-    "x-infra-project-id": {"project-id"},
-    "x-infra-af-id":      {"af-id"},
-    "x-infra-session-id": {"session-id"},
-    "x-infra-user-id":    {"user-id"},
-    "x-request-id":       {"request-id"},
-}
-client, err := sa.New(&sa.ClientConfig{APIKey: "sa-your-api-key", Headers: headers})
+requestContext := sa.WithHeaders(http.Header{
+    "x-infra-project-id": {projectID},
+    "x-infra-af-id":      {afID},
+    "x-infra-session-id": {sessionID},
+    "x-infra-user-id":    {userID},
+    "x-request-id":       {requestID},
+})
+raw, err := client.LLM.ChatCompletions(ctx, sa.JSONMap{
+    "model": "model-id",
+    "messages": []sa.JSONMap{{"role": "user", "content": "Hello"}},
+}, requestContext)
 if err != nil { log.Fatal(err) }
 ```
+
+Pass `requestContext` as the final argument to every direct gateway API call, such as `client.Modal.Create(ctx, body, requestContext)`, `client.Billing.Query(ctx, query, requestContext)`, and `client.LLM.ChatCompletions(ctx, payload, requestContext)`. Reserve `ClientConfig.Headers` for headers that are genuinely fixed for the client's whole lifetime.
 
 ## Multimodal Tasks
 
@@ -883,13 +867,13 @@ Search before choosing a model, and retrieve its model skill when exact paramete
 models, err := client.Modal.ListModels(ctx, sa.ModalModelSearchParams{
     Query: "image",
     Limit: 10,
-})
+}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
 fmt.Println(models.Hits)
 
-skill, err := client.Modal.GetModelSkill(ctx, "alibaba_wanx26_i2v_flash")
+skill, err := client.Modal.GetModelSkill(ctx, "alibaba_wanx26_i2v_flash", requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -910,7 +894,7 @@ body := sa.NewTask("alibaba_wanx26_i2v_flash").
     }).
     Build()
 
-task, err := client.Modal.Create(ctx, body)
+task, err := client.Modal.Create(ctx, body, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -925,11 +909,11 @@ for _, output := range task.Output {
 }
 ```
 
-Use `client.Modal.Precharge(ctx, body)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `GetModelSkill`.
+Use `client.Modal.Precharge(ctx, body, requestContext)` before a generation request when cost estimation is required. Do not assume every model uses the `input` and `parameters` nesting: follow the result from `GetModelSkill`.
 
 ## Billing Queries
 
-Use `client.Billing.Query(ctx, sa.BillingQuery{...})` for the authenticated team's cost statement. The gateway derives the team from the Bearer token, so callers must not pass `team_alias`. The default environment scope is `develop` plus `release`; set `Environment` to one of those values to select a single environment. Use `Start`, `End`, `Provider`, `CredentialName`, `ModelGroup`, `Page`, and `PageSize` for supported filters.
+Use `client.Billing.Query(ctx, sa.BillingQuery{...}, requestContext)` for the authenticated team's cost statement. The gateway derives the team from the Bearer token, so callers must not pass `team_alias`. The default environment scope is `develop` plus `release`; set `Environment` to one of those values to select a single environment. Use `Start`, `End`, `Provider`, `CredentialName`, `ModelGroup`, `Page`, and `PageSize` for supported filters.
 Use RFC3339 or date-only values for `Start`/`End`; the range is `[start, end)`, and omitted values default to the previous seven days.
 
 ## ComfyUI Quick Apps
@@ -941,7 +925,7 @@ highMemory := true
 task, err := client.Modal.CreateComfyUITask(ctx, "d32kq8le878c73876j5g", []sa.ComfyUIInput{
     {Field: "image", Value: "https://image.cdn2.seaart.me/upload/input.webp"},
     {Field: "select", Value: 1},
-}, &highMemory)
+}, &highMemory, requestContext)
 if err != nil { log.Fatal(err) }
 task, err = task.Wait(ctx, sa.WithPollInterval(3*time.Second), sa.WithPollTimeout(5*time.Minute))
 if err != nil { log.Fatal(err) }
@@ -956,7 +940,7 @@ Non-streaming LLM methods return `sa.RawResponse`. Deserialize them to the match
 raw, err := client.LLM.ChatCompletions(ctx, sa.JSONMap{
     "model": "gpt-4o-mini",
     "messages": []sa.JSONMap{{"role": "user", "content": "Hello"}},
-})
+}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -973,7 +957,7 @@ Use the dedicated streaming methods rather than setting `stream: true` on non-st
 events, err := client.LLM.ChatCompletionsStream(ctx, sa.JSONMap{
     "model": "gpt-4o-mini",
     "messages": []sa.JSONMap{{"role": "user", "content": "Hello"}},
-})
+}, requestContext)
 if err != nil {
     log.Fatal(err)
 }
@@ -998,10 +982,10 @@ Use `client.LLM.Messages` / `MessagesStream` for Anthropic Messages and `Respons
 
 Use passthrough only for a vendor-native path such as `/kling/...`, `/vidu/...`, or `/google/...`; pass a relative path and preserve the returned status, headers, and raw body.
 
-Use the dedicated scan methods for image/video, face, audio, sensitive-word, short-text, or visual-and-structured-text checks. Image and face scans accept either `URI` or `ImgBase64`; video and audio scans require `URI`.
+Use the dedicated scan methods for image/video, face, audio, sensitive-word, short-text, character-copy quality, or visual-and-structured-text checks. Image and face scans accept either `URI` or `ImgBase64`; video and audio scans require `URI`. Character quality scans use `client.Modal.ScanCharacterQuality(...)` with a flat production-line A or B field set.
 
 ```go
-if _, err := client.Modal.ScanText(ctx, sa.TextScanRequest{Text: "Text to check"}); err != nil {
+if _, err := client.Modal.ScanText(ctx, sa.TextScanRequest{Text: "Text to check"}, requestContext); err != nil {
     var seaErr *sa.Error
     if errors.As(err, &seaErr) {
         switch seaErr.Kind {
