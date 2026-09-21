@@ -23,8 +23,11 @@ import (
 // status of a chunk frame: chunk frames always report "in_progress", so stopping
 // on status == "completed" would drop the "done" event and lose the result.
 type TaskStreamEvent struct {
-	Event        string
-	TaskID       string
+	Event  string
+	TaskID string
+	// Status is the task status reported by the frame: always "in_progress" on
+	// chunk frames, terminal on the "done" and "error" events.
+	Status       string
 	Cursor       int
 	Chunks       []Output
 	Task         *Task
@@ -117,6 +120,7 @@ func mapTaskStreamEvents(client *transport.Client, events <-chan mmtypes.TaskStr
 			out <- TaskStreamEvent{
 				Event:        event.Event,
 				TaskID:       event.TaskID,
+				Status:       event.Status,
 				Cursor:       event.Cursor,
 				Chunks:       event.Chunks,
 				Task:         newTaskFromResponse(client, event.Task),

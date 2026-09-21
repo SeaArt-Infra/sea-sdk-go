@@ -263,3 +263,69 @@ func TestTask_StreamSubscribesToItsOwnTask(t *testing.T) {
 		t.Fatalf("unexpected terminal event: %#v", last)
 	}
 }
+
+func TestCreateStream_FailsWhenTheStreamEndsWithoutATerminalEvent(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		// Chunks arrive, then the connection is cut: no done/error frame.
+		writeSSE(t, w,
+			"event: output\ndata: {\"id\":\"task_trunc\",\"status\":\"in_progress\",\"output\":[{\"content\":[{\"type\":\"audio\",\"url\":\"https://cdn.example.com/0.wav\"}]}],\"cursor\":1}\n\n",
+		)
+	})
+
+	events, err := client.Modal.CreateStream(context.Background(), sa.JSONMap{"model": "m"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var collected []sa.TaskStreamEvent
+	for event := range events {
+		collected = append(collected, event)
+	}
+	if len(collected) != 2 {
+		t.Fatalf("expected the chunk plus a truncation error, got %#v", collected)
+	}
+	if len(collected[0].Chunks) != 1 || collected[0].Status != "in_progress" {
+		t.Fatalf("the chunks that did arrive must still be delivered: %#v", collected[0])
+	}
+
+	last := collected[1]
+	if !last.Done || last.Err == nil {
+		t.Fatalf("a truncated stream must end with an error event: %#v", last)
+	}
+	if !strings.Contains(last.Err.Error(), "terminal event") {
+		t.Fatalf("unexpected error: %v", last.Err)
+	}
+}
+
+func TestCreateStream_SurfacesMalformedFrames(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeSSE(t, w,
+			"event: output\ndata: {not json\n\n",
+			"event: done\ndata: {\"id\":\"task_bad\",\"status\":\"completed\",\"output\":[]}\n\n",
+		)
+	})
+
+	events, err := client.Modal.CreateStream(context.Background(), sa.JSONMap{"model": "m"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var malformed error
+	var terminal *sa.TaskStreamEvent
+	for event := range events {
+		if event.Err != nil {
+			malformed = event.Err
+		}
+		if event.Done && event.Err == nil {
+			copy := event
+			terminal = &copy
+		}
+	}
+
+	if malformed == nil || !strings.Contains(malformed.Error(), "decode stream frame") {
+		t.Fatalf("a malformed frame must surface its decode error, got %v", malformed)
+	}
+	if terminal == nil || terminal.Task == nil || terminal.Task.Status != "completed" {
+		t.Fatalf("the stream must continue after a malformed frame: %#v", terminal)
+	}
+}

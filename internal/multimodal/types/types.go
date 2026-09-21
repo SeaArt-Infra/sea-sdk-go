@@ -890,8 +890,11 @@ type TaskStreamFrame struct {
 // Judge the end of the stream by Done (true for "done" and "error"), never by the
 // status of a chunk frame.
 type TaskStreamEvent struct {
-	Event        string
-	TaskID       string
+	Event  string
+	TaskID string
+	// Status is the task status reported by the frame: always "in_progress" on
+	// chunk frames, terminal on the "done" and "error" events.
+	Status       string
 	Cursor       int
 	Chunks       []OutputItem
 	Task         *TaskResponse

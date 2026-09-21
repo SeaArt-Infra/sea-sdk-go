@@ -124,6 +124,7 @@ func readTaskStream(ctx context.Context, resp *http.Response) (<-chan types.Task
 		reader := bufio.NewReader(resp.Body)
 		eventName := ""
 		dataLines := make([]string, 0, 4)
+		terminal := false
 
 		emit := func() bool {
 			if len(dataLines) == 0 && eventName == "" {
@@ -136,9 +137,29 @@ func readTaskStream(ctx context.Context, resp *http.Response) (<-chan types.Task
 			dataLines = dataLines[:0]
 
 			if data == "" || data == "[DONE]" {
+				terminal = true
 				return sendTaskStreamEvent(ctx, ch, types.TaskStreamEvent{Event: "done", Done: true})
 			}
-			return sendTaskStreamEvent(ctx, ch, parseTaskStreamEvent(name, []byte(data)))
+
+			event := parseTaskStreamEvent(name, []byte(data))
+			if event.Done {
+				terminal = true
+			}
+			return sendTaskStreamEvent(ctx, ch, event)
+		}
+
+		// A stream that ends without a terminal event is a truncated delivery: the
+		// caller must not treat the partial result as success.
+		finish := func() {
+			if !terminal {
+				sendTaskStreamEvent(ctx, ch, types.TaskStreamEvent{
+					Done: true,
+					Err: &shared.Error{
+						Kind:    shared.ErrNetwork,
+						Message: "stream ended before a terminal event; resume with Subscribe(taskID, cursor)",
+					},
+				})
+			}
 		}
 
 		for {
@@ -146,6 +167,7 @@ func readTaskStream(ctx context.Context, resp *http.Response) (<-chan types.Task
 			if err != nil {
 				if errors.Is(err, io.EOF) {
 					emit()
+					finish()
 					return
 				}
 
@@ -188,34 +210,57 @@ func parseTaskStreamEvent(eventName string, data []byte) types.TaskStreamEvent {
 	switch eventName {
 	case "done":
 		var task types.TaskResponse
-		if err := json.Unmarshal(data, &task); err == nil {
-			event.Task = &task
-			event.TaskID = task.ID
+		if err := json.Unmarshal(data, &task); err != nil {
+			return decodeFrameError(eventName, err)
 		}
+		event.Task = &task
+		event.TaskID = task.ID
+		event.Status = task.Status
 		event.Done = true
 	case "error":
 		var frame struct {
-			ID    string `json:"id"`
-			Error struct {
-				Code    string `json:"code"`
-				Message string `json:"message"`
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			Error  struct {
+				Code         string `json:"code"`
+				Message      string `json:"message"`
+				ErrorMessage string `json:"error_message"`
 			} `json:"error"`
 		}
-		if err := json.Unmarshal(data, &frame); err == nil {
-			event.ErrorCode = frame.Error.Code
-			event.ErrorMessage = frame.Error.Message
-			event.TaskID = frame.ID
+		if err := json.Unmarshal(data, &frame); err != nil {
+			return decodeFrameError(eventName, err)
 		}
+		event.ErrorCode = frame.Error.Code
+		// The gateway uses message on this endpoint, but error_message also appears
+		// on gateway error payloads: keep whichever is present so the failure reason
+		// is never dropped.
+		event.ErrorMessage = frame.Error.Message
+		if event.ErrorMessage == "" {
+			event.ErrorMessage = frame.Error.ErrorMessage
+		}
+		event.TaskID = frame.ID
+		event.Status = frame.Status
 		event.Done = true
 	default:
 		var frame types.TaskStreamFrame
-		if err := json.Unmarshal(data, &frame); err == nil {
-			event.Cursor = frame.Cursor
-			event.Chunks = frame.Output
-			event.TaskID = frame.ID
+		if err := json.Unmarshal(data, &frame); err != nil {
+			return decodeFrameError(eventName, err)
 		}
+		event.Cursor = frame.Cursor
+		event.Chunks = frame.Output
+		event.TaskID = frame.ID
+		event.Status = frame.Status
 	}
 	return event
+}
+
+// decodeFrameError surfaces a malformed frame instead of turning it into an empty
+// event that hides the failure reason.
+func decodeFrameError(eventName string, err error) types.TaskStreamEvent {
+	return types.TaskStreamEvent{
+		Event: eventName,
+		Err:   &shared.Error{Kind: shared.ErrGeneral, Message: "failed to decode stream frame: " + err.Error()},
+	}
 }
 
 func sendTaskStreamEvent(ctx context.Context, ch chan<- types.TaskStreamEvent, event types.TaskStreamEvent) bool {
