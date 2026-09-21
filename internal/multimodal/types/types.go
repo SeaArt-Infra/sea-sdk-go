@@ -85,6 +85,9 @@ type OutputContent struct {
 	JobID string `json:"jobId,omitempty"`
 	Type  string `json:"type,omitempty"`
 	URL   string `json:"url,omitempty"`
+	// ChunkIndex is set on streamed chunks: the chunk's position in the task's
+	// chunk list. It is nil for aggregated results.
+	ChunkIndex *int `json:"chunk_index,omitempty"`
 }
 
 type Usage struct {
@@ -860,4 +863,43 @@ func ApplyPollOptions(opts ...PollOption) PollConfig {
 		opt(&cfg)
 	}
 	return cfg
+}
+
+// TaskStreamFrame is one "output" frame of a streamed generation delivery.
+//
+// Status is always "in_progress" on these frames; the terminal state arrives in
+// the "done" event.
+type TaskStreamFrame struct {
+	ID     string       `json:"id"`
+	Model  string       `json:"model"`
+	Status string       `json:"status"`
+	Output []OutputItem `json:"output"`
+	Cursor int          `json:"cursor"`
+}
+
+// TaskStreamEvent is one event of a streamed generation delivery.
+//
+// Event is one of:
+//   - "output": newly produced chunks; Chunks holds them (one frame may carry
+//     several) and Cursor is the consumption cursor to pass when resuming.
+//   - "done": terminal event; Task holds the complete result, identical to what
+//     Get returns once the task is finished.
+//   - "error": the delivery failed or timed out after streaming had started, see
+//     ErrorCode and ErrorMessage.
+//
+// Judge the end of the stream by Done (true for "done" and "error"), never by the
+// status of a chunk frame.
+type TaskStreamEvent struct {
+	Event  string
+	TaskID string
+	// Status is the task status reported by the frame: always "in_progress" on
+	// chunk frames, terminal on the "done" and "error" events.
+	Status       string
+	Cursor       int
+	Chunks       []OutputItem
+	Task         *TaskResponse
+	ErrorCode    string
+	ErrorMessage string
+	Done         bool
+	Err          error
 }

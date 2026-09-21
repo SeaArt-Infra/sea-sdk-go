@@ -215,6 +215,80 @@ if errors.As(err, &sdkErr) {
 }
 ```
 
+### Synchronous and Streamed Delivery
+
+`Create` + `Wait` stays available, and two one-call deliveries cover the common cases. Both
+submit the same body; they only differ in how the result is delivered. The route and the
+response representation stay inside the SDK.
+
+**Synchronous: `CreateSync`**
+
+```go
+task, err := client.Modal.CreateSync(ctx, sa.JSONMap{
+    "model": "your-model-id",
+    "input": []map[string]any{{"params": map[string]any{"prompt": "a dog is running"}}},
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(task.ID, task.Status, task.Output[0].Content[0].URL, task.Usage.Cost)
+```
+
+`CreateSync` blocks until the task reaches a terminal state and returns the final `Task`. A
+failed task returns `*sa.Error` with `Kind == sa.ErrTaskFailed`, like `Wait`. If the gateway
+gives up waiting, the error has `Kind == sa.ErrTimeout` and `TaskID` set — resume that task
+with `Subscribe`/`Wait` instead of submitting the work again.
+
+> **Do not use `CreateSync` for tasks that may run longer than 120 seconds.** That wait is
+> silent, so a proxy or load balancer can drop the connection at its idle timeout. Use the
+> asynchronous path for those tasks — `Create` returns immediately and every `Get`/`Wait` poll
+> is a short request:
+
+```go
+task, err := client.Modal.Create(ctx, body)
+task, err = client.Modal.Wait(ctx, task.ID, sa.WithPollInterval(5*time.Second), sa.WithPollTimeout(30*time.Minute))
+```
+
+**Streamed: `CreateStream` and `Subscribe`**
+
+```go
+events, err := client.Modal.CreateStream(ctx, body)
+if err != nil {
+    log.Fatal(err)
+}
+
+cursor := 0
+for event := range events {
+    switch event.Event {
+    case "output":
+        for _, chunk := range event.Chunks { // one frame may carry several chunks
+            content := chunk.Content[0]
+            fmt.Println(content.ChunkIndex, content.URL)
+        }
+        cursor = event.Cursor // remember it for a resume
+    case "done":
+        fmt.Println(event.Task.Status, event.Task.Usage.Cost)
+    case "error":
+        fmt.Println(event.ErrorCode, event.ErrorMessage)
+    }
+}
+
+// Resume after a dropped connection, or subscribe to a task created elsewhere.
+events, err = client.Modal.Subscribe(ctx, task.ID, cursor)
+```
+
+`Subscribe` accepts a task id and works for running tasks, finished tasks (chunks replay from
+`cursor`) and tasks created by someone else; `task.Stream(ctx, cursor)` does the same on a task
+object. Streaming holds one long-lived connection, kept alive by keepalive comments.
+
+Two rules when consuming a stream:
+
+- Stop on `event.Done` (true for both `done` and `error`). Chunk frames always report
+  `status == "in_progress"`, so stopping on a task status would drop the terminal event and
+  lose the result.
+- Iterate `event.Chunks`: the gateway batches about half a second of output per frame, so a
+  frame may carry several chunks and `event.Cursor` advances by that count.
+
 ### ComfyUI Quick Apps
 
 Pass template IDs to `ListComfyUITemplates` to retrieve the corresponding quick-app parameters. `CreateComfyUITask` fixes the model to `comfyui`, routes it through `X-Model`, and builds the required request envelope.
