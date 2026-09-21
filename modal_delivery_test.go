@@ -289,6 +289,9 @@ func TestCreateStream_FailsWhenTheStreamEndsWithoutATerminalEvent(t *testing.T) 
 	}
 
 	last := collected[1]
+	if last.Event != "error" {
+		t.Fatalf("a truncated stream must be reported as an error event, got %q", last.Event)
+	}
 	if !last.Done || last.Err == nil {
 		t.Fatalf("a truncated stream must end with an error event: %#v", last)
 	}
@@ -327,5 +330,85 @@ func TestCreateStream_SurfacesMalformedFrames(t *testing.T) {
 	}
 	if terminal == nil || terminal.Task == nil || terminal.Task.Status != "completed" {
 		t.Fatalf("the stream must continue after a malformed frame: %#v", terminal)
+	}
+}
+
+func TestCreateStream_ParsesNumericErrorCodes(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeSSE(t, w,
+			"event: error\ndata: {\"id\":\"task_num\",\"status\":\"failed\",\"error\":{\"code\":110001,\"message\":\"vendor rejected\"}}\n\n",
+		)
+	})
+
+	events, err := client.Modal.CreateStream(context.Background(), sa.JSONMap{"model": "m"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var collected []sa.TaskStreamEvent
+	for event := range events {
+		collected = append(collected, event)
+	}
+	if len(collected) != 1 {
+		t.Fatalf("expected a single terminal event, got %#v", collected)
+	}
+
+	frame := collected[0]
+	if frame.Event != "error" || !frame.Done {
+		t.Fatalf("unexpected terminal event: %#v", frame)
+	}
+	if frame.Err != nil {
+		t.Fatalf("a decodable error frame must not be reported as a decode failure: %v", frame.Err)
+	}
+	if frame.ErrorCode != "110001" || frame.ErrorMessage != "vendor rejected" {
+		t.Fatalf("a numeric error code must be kept: %#v", frame)
+	}
+	if frame.Status != "failed" {
+		t.Fatalf("unexpected status: %q", frame.Status)
+	}
+}
+
+func TestSubscribe_RejectsNegativeCursor(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("no request must be sent for an invalid cursor")
+	})
+
+	_, err := client.Modal.Subscribe(context.Background(), "task_x", -1)
+	var sdkErr *sa.Error
+	if !errors.As(err, &sdkErr) || sdkErr.Kind != sa.ErrGeneral {
+		t.Fatalf("expected a general error, got %v", err)
+	}
+	if !strings.Contains(sdkErr.Message, "cursor must be a non-negative integer") {
+		t.Fatalf("unexpected message: %s", sdkErr.Message)
+	}
+}
+
+func TestCreateStream_MalformedFramesUseTheErrorChannel(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeSSE(t, w,
+			"event: output\ndata: {not json\n\n",
+			"event: done\ndata: {\"id\":\"task_bad\",\"status\":\"completed\",\"output\":[]}\n\n",
+		)
+	})
+
+	events, err := client.Modal.CreateStream(context.Background(), sa.JSONMap{"model": "m"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var sawMalformed, sawTerminal bool
+	for event := range events {
+		if event.Err != nil && event.Event == "error" && !event.Done {
+			sawMalformed = true
+		}
+		if event.Done && event.Err == nil && event.Task != nil {
+			sawTerminal = true
+		}
+	}
+	if !sawMalformed {
+		t.Fatal("a malformed frame must arrive as a non-terminal error event")
+	}
+	if !sawTerminal {
+		t.Fatal("the stream must continue after a malformed frame")
 	}
 }

@@ -16,8 +16,13 @@ import (
 //     cursor to pass when resuming.
 //   - "done": terminal event; Task holds the complete result, identical to what
 //     Get returns once the task is finished.
-//   - "error": the delivery failed or timed out after streaming had started; see
-//     ErrorCode and ErrorMessage.
+//   - "error": the delivery failed. Err explains it; ErrorCode/ErrorMessage carry the
+//     gateway's reason when the failure came from the gateway.
+//
+// Every failure is reported through that "error" event, so a caller that switches on
+// Event never misses one. Done says how far it went: true for a terminal failure (the
+// stream is over, for example it ended before a terminal event), false when only one
+// frame could not be parsed and the stream continues.
 //
 // Judge the end of the stream by Done (true for "done" and "error"), never by the
 // status of a chunk frame: chunk frames always report "in_progress", so stopping

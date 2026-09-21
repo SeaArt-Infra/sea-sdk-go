@@ -83,6 +83,11 @@ func Subscribe(client *transport.Client, ctx context.Context, taskID string, cur
 	if trimmed == "" {
 		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "task_id is required"}
 	}
+	if cursor < 0 {
+		// Dropping a bad cursor would replay from the beginning and duplicate
+		// output the caller already consumed.
+		return nil, &shared.Error{Kind: shared.ErrGeneral, Message: "cursor must be a non-negative integer"}
+	}
 	if headers == nil {
 		headers = http.Header{}
 	}
@@ -153,7 +158,8 @@ func readTaskStream(ctx context.Context, resp *http.Response) (<-chan types.Task
 		finish := func() {
 			if !terminal {
 				sendTaskStreamEvent(ctx, ch, types.TaskStreamEvent{
-					Done: true,
+					Event: "error",
+					Done:  true,
 					Err: &shared.Error{
 						Kind:    shared.ErrNetwork,
 						Message: "stream ended before a terminal event; resume with Subscribe(taskID, cursor)",
@@ -172,8 +178,9 @@ func readTaskStream(ctx context.Context, resp *http.Response) (<-chan types.Task
 				}
 
 				sendTaskStreamEvent(ctx, ch, types.TaskStreamEvent{
-					Done: true,
-					Err:  &shared.Error{Kind: shared.ErrNetwork, Message: "stream read failed: " + err.Error()},
+					Event: "error",
+					Done:  true,
+					Err:   &shared.Error{Kind: shared.ErrNetwork, Message: "stream read failed: " + err.Error()},
 				})
 				return
 			}
@@ -222,15 +229,19 @@ func parseTaskStreamEvent(eventName string, data []byte) types.TaskStreamEvent {
 			ID     string `json:"id"`
 			Status string `json:"status"`
 			Error  struct {
-				Code         string `json:"code"`
-				Message      string `json:"message"`
-				ErrorMessage string `json:"error_message"`
+				Code         json.RawMessage `json:"code"`
+				Message      string          `json:"message"`
+				ErrorMessage string          `json:"error_message"`
 			} `json:"error"`
 		}
 		if err := json.Unmarshal(data, &frame); err != nil {
-			return decodeFrameError(eventName, err)
+			// The frame is terminal even when it cannot be decoded: keep Event and
+			// Done so the caller does not miss a stream failure.
+			failure := decodeFrameError(eventName, err)
+			failure.Done = true
+			return failure
 		}
-		event.ErrorCode = frame.Error.Code
+		event.ErrorCode = rawCodeString(frame.Error.Code)
 		// The gateway uses message on this endpoint, but error_message also appears
 		// on gateway error payloads: keep whichever is present so the failure reason
 		// is never dropped.
@@ -258,9 +269,27 @@ func parseTaskStreamEvent(eventName string, data []byte) types.TaskStreamEvent {
 // event that hides the failure reason.
 func decodeFrameError(eventName string, err error) types.TaskStreamEvent {
 	return types.TaskStreamEvent{
-		Event: eventName,
-		Err:   &shared.Error{Kind: shared.ErrGeneral, Message: "failed to decode stream frame: " + err.Error()},
+		Event: "error",
+		Err: &shared.Error{
+			Kind:    shared.ErrGeneral,
+			Message: "failed to decode stream frame (event " + eventName + "): " + err.Error(),
+		},
 	}
+}
+
+// rawCodeString renders a gateway error code, which is a string on this endpoint
+// but numeric on gateway error payloads.
+func rawCodeString(raw json.RawMessage) string {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		return ""
+	}
+
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text
+	}
+	return strings.Trim(trimmed, "\"")
 }
 
 func sendTaskStreamEvent(ctx context.Context, ch chan<- types.TaskStreamEvent, event types.TaskStreamEvent) bool {
@@ -288,12 +317,12 @@ func syncDeliveryError(status int, payload []byte) error {
 	var body struct {
 		ID    string `json:"id"`
 		Error struct {
-			Code string `json:"code"`
+			Code json.RawMessage `json:"code"`
 		} `json:"error"`
 	}
 	_ = json.Unmarshal(payload, &body)
 
-	if body.Error.Code == syncTimeoutCode {
+	if rawCodeString(body.Error.Code) == syncTimeoutCode {
 		sdkErr.Kind = shared.ErrTimeout
 	}
 	if body.ID != "" {
