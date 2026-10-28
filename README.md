@@ -29,12 +29,12 @@ Features:
 ## Installation
 
 ```bash
-go get github.com/SeaArt-Infra/sea-sdk-go.git
+go get github.com/SeaArt-Infra/sea-sdk-go
 ```
 
 Requirements:
 
-- Go 1.22+
+- Go 1.22.12 or later
 
 ## Initialization
 
@@ -804,7 +804,7 @@ description: Build and troubleshoot SeaArt AI gateway integrations with the sea-
 
 # SeaArt Go SDK
 
-Use `github.com/SeaArt-Infra/sea-sdk-go` to call the SeaArt unified gateway from Go 1.22+. Import it as `sa`. The SDK is synchronous except for its streaming channels and uses only the standard library.
+Use `github.com/SeaArt-Infra/sea-sdk-go` to call the SeaArt unified gateway from Go 1.22.12 or later. Import it as `sa`. The SDK is synchronous except for its streaming channels and uses only the standard library.
 
 ## Install
 
